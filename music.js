@@ -187,7 +187,7 @@ function generateMusicDashboard(host, uuid) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Worker 订阅管理</title>
     
-    <!-- APlayer 样式（用于 Meting.js 渲染 APlayer） -->
+    <!-- APlayer 样式 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.css">
     
     <style>
@@ -397,9 +397,7 @@ function generateMusicDashboard(host, uuid) {
             margin-top: 6px; 
         }
 
-        /* ===== 音乐播放器相关样式 ===== */
-
-        /* 播放器面板（点击胶囊展开） */
+        /* ===== 播放器面板 ===== */
         #player-wrap {
             position: fixed;
             left: 18px;
@@ -410,21 +408,23 @@ function generateMusicDashboard(host, uuid) {
             display: none;
             transform-origin: left bottom;
         }
-        
         #player-wrap.show {
             display: block;
             animation: popIn .18s ease;
         }
-        
         @keyframes popIn {
             from { opacity: 0; transform: scale(.96) }
             to { opacity: 1; transform: scale(1) }
         }
 
-        /* APlayer 微调样式 - 自定义播放器外观 */
+        /* APlayer 微调样式 */
         .aplayer { 
             border-radius: 12px !important; 
             overflow: hidden !important; 
+        }
+        .aplayer .aplayer-lrc p { 
+            color: orange !important; 
+            font-weight: 700; 
         }
 
         /* 顶部歌曲名改为黑色 */
@@ -437,19 +437,41 @@ function generateMusicDashboard(host, uuid) {
         .aplayer .aplayer-list ol li {
             color: #000 !important;
         }
+        .aplayer .aplayer-list ol li .aplayer-list-title {
+            color: #000 !important;
+        }
 
-        /* 歌词颜色设置 */
+        /* 歌词改为橙色 */
         .aplayer .aplayer-lrc p {
             color: #ff8c00 !important;
         }
-
         .aplayer .aplayer-lrc p.aplayer-lrc-current {
             color: #ff4500 !important;
             font-weight: bold;
             font-size: 16px;
         }
 
-        /* ===== 独立歌词显示 - 新增逐步推进效果 ===== */
+        /* 播放器整体样式调整 */
+        .aplayer {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .aplayer .aplayer-info {
+            border-top: none;
+            padding: 12px 15px 8px;
+        }
+        .aplayer .aplayer-list ol li {
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .aplayer .aplayer-list ol li:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        .aplayer .aplayer-list ol li.aplayer-list-light {
+            background: rgba(255, 140, 0, 0.1);
+        }
+
+        /* ===== 独立歌词显示 ===== */
         #floating-lyrics {
             position: fixed;
             left: 100px;
@@ -459,22 +481,20 @@ function generateMusicDashboard(host, uuid) {
             color: #ff8c00;
             font-size: 18px;
             font-weight: bold;
+            text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.9);
             background: rgba(255, 255, 255, 0.10);
             padding: 15px 20px;
             border-radius: 12px;
             backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
             max-width: 400px;
             opacity: 0;
             transition: opacity 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
             pointer-events: none;
         }
-
-        #floating-lyrics.show {
-            opacity: 1;
-        }
-
-        /* 当前歌词行样式 */
+        #floating-lyrics.show { opacity: 1; }
         #floating-lyrics .current-line {
             color: #ff4500;
             font-size: 30px;
@@ -484,16 +504,12 @@ function generateMusicDashboard(host, uuid) {
             overflow: hidden;
             position: relative;
         }
-
-        /* 下一句歌词样式 */
         #floating-lyrics .next-line {
             color: #ff8c00;
             font-size: 14px;
             opacity: 0.8;
             min-height: 18px;
         }
-
-        /* 逐字推进效果 */
         #floating-lyrics .current-line .typing-text {
             display: inline-block;
             overflow: hidden;
@@ -502,63 +518,59 @@ function generateMusicDashboard(host, uuid) {
             border-right: 2px solid #ff4500;
             animation-fill-mode: both;
         }
-
-        /* 打字机效果动画 */
+        #floating-lyrics .current-line .fade-in-text {
+            opacity: 0;
+            animation: fadeIn 0.5s ease-in forwards;
+        }
         @keyframes typing {
             from { width: 0 }
             to { width: 100% }
         }
-
         @keyframes blink-caret {
             from, to { border-color: transparent }
             50% { border-color: #ff4500 }
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
 
-        /* ===== 音乐胶囊（固定左下） ===== */
-#music-capsule {
-    position: fixed;
-    left: 22px;
-    bottom: 96px;
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 30000;
-    background: radial-gradient(circle at 30% 30%, #00c3ff, #0061ff);
-    box-shadow: 0 8px 28px rgba(0,180,255,0.12);
-    overflow: hidden; /* 新增：确保内容不超出圆形 */
-}
+        /* ===== 音乐胶囊 ===== */
+        #music-capsule {
+            position: fixed;
+            left: 22px;
+            bottom: 96px;
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 30000;
+            background: radial-gradient(circle at 30% 30%, #00c3ff, #0061ff);
+            box-shadow: 0 8px 28px rgba(0,180,255,0.12);
+        }
+        #music-capsule img {
+            width: 95%;
+            height: 95%;
+            border-radius: 50%;
+            object-fit: cover;
+            transition: transform .3s;
+        }
+        #music-capsule.playing {
+            background: radial-gradient(circle at 30% 30%, #ff9500, #ff5e00);
+            box-shadow: 0 8px 28px rgba(255,140,0,0.28);
+        }
+        #music-capsule.playing img {
+            animation: spin 6s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0); }
+            to { transform: rotate(360deg); }
+        }
 
-#music-capsule img {
-    width: 90%; /* 设置图片宽度为容器的90% */
-    height: 90%; /* 设置图片高度为容器的90% */
-    border-radius: 50%; /* 确保图片本身也是圆形 */
-    object-fit: cover; /* 确保图片覆盖整个区域且不变形 */
-    transition: transform 0.3s ease; /* 添加平滑过渡效果 */
-}
-
-#music-capsule:hover img {
-    transform: scale(1.05); /* 悬停时轻微放大 */
-}
-
-#music-capsule.playing {
-    background: radial-gradient(circle at 30% 30%, #ff9500, #ff5e00);
-    box-shadow: 0 8px 28px rgba(255,140,0,0.28);
-}
-
-#music-capsule.playing img {
-    animation: spin 6s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0) }
-    to { transform: rotate(360deg) }
-}
-
-        /* ===== 右键菜单（毛玻璃半透明） ===== */
+        /* ===== 右键菜单 ===== */
         #right-menu {
             position: fixed;
             display: none;
@@ -574,31 +586,41 @@ function generateMusicDashboard(host, uuid) {
             opacity: 0;
             transform: scale(.98);
             transition: opacity .12s, transform .12s;
+            border: 2px solid #10b981;
         }
-
         #right-menu.show {
             display: flex;
             opacity: 1;
             transform: scale(1);
             flex-direction: column;
         }
-
         #right-menu li {
             list-style: none;
             padding: 10px 16px;
             cursor: pointer;
             white-space: nowrap;
             font-weight: 700;
-            transition: background .12s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-
         #right-menu li:hover {
-            background: rgba(255, 255, 255, 0.14);
-            color: #000;
+            background: #3b82f6 !important;
+            color: white !important;
             border-radius: 6px;
+            transform: translateX(5px);
         }
-
-        /* 右键菜单箭头 */
+        #right-menu li:hover::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        #right-menu li:hover::before { left: 100%; }
         #right-menu::after {
             content: "";
             position: absolute;
@@ -608,6 +630,23 @@ function generateMusicDashboard(host, uuid) {
             border-left: 8px solid transparent;
             border-right: 8px solid transparent;
             border-bottom: 8px solid rgba(255, 255, 255, 0.12);
+        }
+        #right-menu li:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* 响应式 */
+        @media (max-width:900px) {
+            #music-capsule { left: 18px; bottom: 22px; }
+            #player-wrap { left: 12px; bottom: 84px; width: calc(100% - 24px); }
+            #floating-lyrics {
+                left: 90px;
+                bottom: 30px;
+                max-width: 250px;
+                font-size: 16px;
+            }
+            #floating-lyrics .current-line { font-size: 18px; }
+            #floating-lyrics .next-line { font-size: 12px; }
         }
     </style>
 </head>
@@ -699,7 +738,7 @@ function generateMusicDashboard(host, uuid) {
         <img id="capsule-cover" src="https://p2.music.126.net/4HGEnXVexEfF2M4WdDdfrQ==/109951166354363385.jpg" alt="capsule cover">
     </div>
     
-    <!-- 播放器容器（Meting 会在这里渲染 APlayer） -->
+    <!-- 播放器容器 -->
     <div id="player-wrap" aria-hidden="true">
         <div id="aplayer-container"></div>
     </div>
@@ -720,392 +759,387 @@ function generateMusicDashboard(host, uuid) {
     <!-- Toast 提示 -->
     <div id="toast" class="toast">已复制!</div>
     
-    <!-- Meting + APlayer 脚本 -->
-    <script src="https://unpkg.com/meting@2.0.1/dist/Meting.min.js"></script>
+    <!-- APlayer 脚本 -->
     <script src="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.js"></script>
     
     <script>
-        /* ====================== 音乐播放器配置 ====================== */
-        // 网易云歌单 ID
-        const PLAYLIST_ID = '14148542684';
-        const HOST = '${host}';
-        const UUID = '${uuid}';
+    /* ====================== 配置区域 ====================== */
+    const PLAYLIST_ID = '14148542684';  // 网易云歌单 ID
+    const HOST = '${host}';
+    const UUID = '${uuid}';
 
-        /* ======= DOM 元素引用 ======= */
-        const capsule = document.getElementById('music-capsule');
-        const capsuleCover = document.getElementById('capsule-cover');
-        const playerWrap = document.getElementById('player-wrap');
-        const aplayerContainer = document.getElementById('aplayer-container');
-        const rightMenu = document.getElementById('right-menu');
-        const floatingLyrics = document.getElementById('floating-lyrics');
-        const currentLineEl = floatingLyrics.querySelector('.current-line');
-        const nextLineEl = floatingLyrics.querySelector('.next-line');
+    /* ======= DOM 引用 ======= */
+    const capsule = document.getElementById('music-capsule');
+    const capsuleCover = document.getElementById('capsule-cover');
+    const playerWrap = document.getElementById('player-wrap');
+    const aplayerContainer = document.getElementById('aplayer-container');
+    const rightMenu = document.getElementById('right-menu');
 
-        let metingEl = null;
-        let aplayer = null;
-        let lyricsInterval = null;
-        let currentLyric = '';
-        let lyricsVisible = true;
+    let aplayer = null;
+    let lyricsInterval = null;
+    let currentLyric = '';
+    let lyricsVisible = true;
 
-        /* ===== 独立歌词显示功能 ===== */
-        function showLyricsWithEffect(currentText, nextText) {
-            if (currentText === currentLyric) return;
+    /* ===== 独立歌词显示功能 ===== */
+    const floatingLyrics = document.getElementById('floating-lyrics');
+    const currentLineEl = floatingLyrics.querySelector('.current-line');
+    const nextLineEl = floatingLyrics.querySelector('.next-line');
+
+    function showLyricsWithEffect(currentText, nextText) {
+        if (!lyricsVisible) return;
+        if (currentText === currentLyric) return;
+        
+        currentLyric = currentText;
+        currentLineEl.innerHTML = '';
+        
+        if (currentText && currentText.trim()) {
+            const typingSpan = document.createElement('span');
+            typingSpan.className = 'typing-text';
+            typingSpan.textContent = currentText;
             
-            currentLyric = currentText;
-            currentLineEl.innerHTML = '';
+            const fadeSpan = document.createElement('span');
+            fadeSpan.className = 'fade-in-text';
+            fadeSpan.textContent = currentText;
             
-            if (currentText && currentText.trim()) {
-                const typingSpan = document.createElement('span');
-                typingSpan.className = 'typing-text';
-                typingSpan.textContent = currentText;
-                
-                const fadeSpan = document.createElement('span');
-                fadeSpan.className = 'fade-in-text';
-                fadeSpan.textContent = currentText;
-                
-                if (currentText.length > 15) {
-                    currentLineEl.appendChild(fadeSpan);
-                } else {
-                    currentLineEl.appendChild(typingSpan);
-                }
-                
-                nextLineEl.textContent = nextText || '';
-                floatingLyrics.classList.add('show');
+            if (currentText.length > 15) {
+                currentLineEl.appendChild(fadeSpan);
             } else {
-                floatingLyrics.classList.remove('show');
+                currentLineEl.appendChild(typingSpan);
             }
+            
+            nextLineEl.textContent = nextText || '';
+            floatingLyrics.classList.add('show');
+        } else {
+            floatingLyrics.classList.remove('show');
         }
+    }
 
-        function startLyricsUpdate(ap) {
+    function startLyricsUpdate(ap) {
+        if (lyricsInterval) clearInterval(lyricsInterval);
+        lyricsInterval = setInterval(() => updateLyricsFromDOM(), 100);
+    }
+
+    function updateLyricsFromDOM() {
+        try {
             if (!lyricsVisible) return;
             
-            if (lyricsInterval) clearInterval(lyricsInterval);
-            
-            lyricsInterval = setInterval(() => {
-                updateLyricsFromDOM();
-            }, 100);
-        }
-
-        function updateLyricsFromDOM() {
-            if (!lyricsVisible) return;
-            
-            try {
-                const lrcContainer = document.querySelector('.aplayer-lrc');
-                if (!lrcContainer) {
-                    floatingLyrics.classList.remove('show');
-                    return;
-                }
-                
-                const currentLrc = lrcContainer.querySelector('p.aplayer-lrc-current');
-                const allLrcLines = lrcContainer.querySelectorAll('p');
-                
-                if (currentLrc && currentLrc.textContent.trim()) {
-                    const currentText = currentLrc.textContent.trim();
-                    let nextText = '';
-                    
-                    for (let i = 0; i < allLrcLines.length; i++) {
-                        if (allLrcLines[i] === currentLrc && i < allLrcLines.length - 1) {
-                            nextText = allLrcLines[i + 1].textContent.trim();
-                            break;
-                        }
-                    }
-                    
-                    showLyricsWithEffect(currentText, nextText);
-                } else {
-                    floatingLyrics.classList.remove('show');
-                    currentLyric = '';
-                }
-            } catch (error) {
+            const lrcContainer = document.querySelector('.aplayer-lrc');
+            if (!lrcContainer) {
                 floatingLyrics.classList.remove('show');
-                currentLyric = '';
-            }
-        }
-
-        function toggleLyricsVisibility() {
-            lyricsVisible = !lyricsVisible;
-            
-            if (lyricsVisible) {
-                floatingLyrics.classList.add('show');
-                if (aplayer && !aplayer.audio.paused) {
-                    startLyricsUpdate(aplayer);
-                }
-            } else {
-                floatingLyrics.classList.remove('show');
-                currentLineEl.textContent = '';
-                nextLineEl.textContent = '';
-                currentLyric = '';
+                return;
             }
             
-            const lyricsMenuItem = document.getElementById('menu-lyrics');
-            lyricsMenuItem.textContent = lyricsVisible ? '📜 隐藏歌词' : '📜 显示歌词';
-            localStorage.setItem('lyricsVisible', lyricsVisible.toString());
-        }
-
-        /* ================= 初始化 Meting + APlayer ================= */
-        function initMeting() {
-            if (aplayer) return Promise.resolve(aplayer);
-            return new Promise((resolve, reject) => {
-                if (metingEl && metingEl.aplayer) {
-                    aplayer = metingEl.aplayer;
-                    bindAPlayerEvents(aplayer);
-                    return resolve(aplayer);
-                }
-
-                aplayerContainer.innerHTML = '';
-                metingEl = document.createElement('meting-js');
-                metingEl.setAttribute('server', 'netease');
-                metingEl.setAttribute('type', 'playlist');
-                metingEl.setAttribute('id', PLAYLIST_ID);
-                metingEl.setAttribute('autoplay', 'false');
-                metingEl.setAttribute('theme', '#49b1f5');
-                metingEl.setAttribute('loop', 'all');
-                metingEl.setAttribute('preload', 'auto');
-                metingEl.setAttribute('lrctype', '1');
-                aplayerContainer.appendChild(metingEl);
-
-                let handled = false;
-                function tryResolve() {
-                    if (handled) return;
-                    if (metingEl && metingEl.aplayer) {
-                        aplayer = metingEl.aplayer;
-                        handled = true;
-                        bindAPlayerEvents(aplayer);
-                        resolve(aplayer);
+            const currentLrc = lrcContainer.querySelector('p.aplayer-lrc-current');
+            const allLrcLines = lrcContainer.querySelectorAll('p');
+            
+            if (currentLrc && currentLrc.textContent.trim()) {
+                const currentText = currentLrc.textContent.trim();
+                let nextText = '';
+                
+                for (let i = 0; i < allLrcLines.length; i++) {
+                    if (allLrcLines[i] === currentLrc && i < allLrcLines.length - 1) {
+                        nextText = allLrcLines[i + 1].textContent.trim();
+                        break;
                     }
                 }
-                metingEl.addEventListener('rendered', tryResolve);
-                const poll = setInterval(() => { 
-                    tryResolve(); 
-                    if (handled) clearInterval(poll); 
-                }, 300);
-                setTimeout(() => { 
-                    if (!handled) { 
-                        clearInterval(poll); 
-                        reject(new Error('APlayer 初始化超时')); 
-                    } 
-                }, 9000);
-            });
-        }
-
-        function bindAPlayerEvents(ap) {
-            if (!ap) return;
-            
-            function updateCover() {
-                try {
-                    const info = ap.list.audios[ap.list.index];
-                    if (info && info.cover) capsuleCover.src = info.cover;
-                } catch (e) {}
-            }
-            
-            ap.on('loadeddata', updateCover);
-            ap.on('listswitch', updateCover);
-            ap.on('play', () => {
-                capsule.classList.add('playing');
-                startLyricsUpdate(ap);
-            });
-            ap.on('pause', () => {
-                capsule.classList.remove('playing');
+                
+                showLyricsWithEffect(currentText, nextText);
+            } else {
                 floatingLyrics.classList.remove('show');
                 currentLyric = '';
-            });
-            ap.on('ended', () => {
-                floatingLyrics.classList.remove('show');
-                currentLyric = '';
-            });
-        }
-
-        async function ensurePlayerAndRun(fn) {
-            try {
-                const ap = await initMeting();
-                if (typeof fn === 'function') fn(ap);
-            } catch (err) {
-                console.warn('播放器未就绪：', err);
             }
+        } catch (error) {
+            floatingLyrics.classList.remove('show');
+            currentLyric = '';
         }
+    }
 
-        /* 点击胶囊显示播放器 */
-        capsule.addEventListener('click', () => {
-            capsule.style.display = 'none';
-            playerWrap.classList.add('show');
-            initMeting().catch(() => {});
-        });
-
-        /* ================== 右键菜单功能 ================== */
-        function showRightMenuAt(clientX, clientY) {
-            rightMenu.style.display = 'block';
-            rightMenu.classList.remove('show');
-            requestAnimationFrame(() => {
-                const mw = rightMenu.offsetWidth || 220;
-                const mh = rightMenu.offsetHeight || 280;
-                let left = Math.round(clientX - mw / 2);
-                left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
-                let top = clientY - mh - 12;
-                if (top < 8) top = clientY + 12;
-                if (top + mh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - mh - 8);
-                rightMenu.style.left = left + 'px';
-                rightMenu.style.top = top + 'px';
-                const arrowLeft = Math.max(12, Math.min(clientX - left, mw - 12));
-                rightMenu.style.setProperty('--arrow-left', arrowLeft + 'px');
-                rightMenu.classList.add('show');
-            });
-        }
-
-        document.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            showRightMenuAt(e.clientX, e.clientY);
-        });
-
-        function hideRightMenuImmediate() {
-            rightMenu.classList.remove('show');
-            rightMenu.style.display = 'none';
-        }
+    /* ================= 初始化 APlayer（直接用API加载歌单） ================= */
+    async function initMeting() {
+        if (aplayer) return aplayer;
         
-        document.addEventListener('click', (e) => {
-            if (!rightMenu.contains(e.target)) hideRightMenuImmediate();
-        });
-        
-        document.addEventListener('touchstart', (e) => {
-            if (!rightMenu.contains(e.target)) hideRightMenuImmediate();
-        });
-
-        /* 菜单功能绑定 */
-        document.getElementById('menu-play').addEventListener('click', () => { 
-            ensurePlayerAndRun(ap => ap.toggle()); 
-            hideRightMenuImmediate(); 
-        });
-        
-        document.getElementById('menu-prev').addEventListener('click', () => { 
-            ensurePlayerAndRun(ap => ap.skipBack()); 
-            hideRightMenuImmediate(); 
-        });
-        
-        document.getElementById('menu-next').addEventListener('click', () => { 
-            ensurePlayerAndRun(ap => ap.skipForward()); 
-            hideRightMenuImmediate(); 
-        });
-        
-        document.getElementById('menu-volup').addEventListener('click', () => { 
-            ensurePlayerAndRun(ap => ap.volume(Math.min((ap.audio.volume || 0.8) + 0.1, 1), true)); 
-            hideRightMenuImmediate(); 
-        });
-        
-        document.getElementById('menu-voldown').addEventListener('click', () => { 
-            ensurePlayerAndRun(ap => ap.volume(Math.max((ap.audio.volume || 0.2) - 0.1, 0), true)); 
-            hideRightMenuImmediate(); 
-        });
-
-        document.getElementById('menu-lyrics').addEventListener('click', () => {
-            toggleLyricsVisibility();
-            hideRightMenuImmediate();
-        });
-
-        document.getElementById('menu-support').addEventListener('click', () => { 
-            window.open('https://1356666.xyz', '_blank'); 
-            hideRightMenuImmediate(); 
-        });
-
-        document.getElementById('menu-fullscreen').addEventListener('click', () => {
-            hideRightMenuImmediate();
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            } else {
-                document.exitFullscreen().catch(() => {});
-            }
-        });
-
-        document.getElementById('menu-close').addEventListener('click', () => {
-            ensurePlayerAndRun(ap => ap.pause());
-            playerWrap.classList.remove('show');
-            capsule.style.display = 'flex';
-            hideRightMenuImmediate();
-        });
-
-        /* 预初始化 APlayer */
-        initMeting().then(ap => {
-            console.log('APlayer初始化完成');
-        }).catch(() => {
-            console.log('APlayer初始化失败');
-        });
-
-        /* 页面加载完成后初始化歌词状态 */
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedLyricsVisible = localStorage.getItem('lyricsVisible');
-            if (savedLyricsVisible !== null) {
-                lyricsVisible = savedLyricsVisible === 'true';
+        try {
+            aplayerContainer.innerHTML = '';
+            
+            // 使用更新的 API 接口（2026年4月24日）
+            const apiUrl = 'https://api.injahow.cn/meting/?server=netease&type=playlist&id=' + PLAYLIST_ID;
+            const response = await fetch(apiUrl);
+            const songs = await response.json();
+            
+            if (!songs || songs.length === 0) {
+                throw new Error('歌单加载失败');
             }
             
-            const lyricsMenuItem = document.getElementById('menu-lyrics');
-            lyricsMenuItem.textContent = lyricsVisible ? '📜 隐藏歌词' : '📜 显示歌词';
-            
-            if (!lyricsVisible) {
-                floatingLyrics.classList.remove('show');
-            }
-        });
-
-        /* ================== 代理面板功能 ================== */
-        function toggleClashMode() {
-            const c = document.getElementById('clashMode').checked;
-            document.getElementById('clashSettings').style.display = c ? 'block' : 'none';
-            updateLink();
-        }
-
-        function updateLink() {
-            let b = document.getElementById('subBaseUrl').value.trim();
-            if (b.endsWith('/')) b = b.slice(0, -1);
-            if (!b.startsWith('http')) b = 'https://' + b;
-            
-            const p = document.getElementById('proxyIp').value.trim();
-            const h = HOST;
-            const u = UUID;
-            const c = document.getElementById('clashMode').checked;
-            
-            let rp = "/";
-            if (p) rp = "/proxyip=" + p;
-            
-            const cl = b + "/sub?uuid=" + u + "&path=" + encodeURIComponent(rp);
-            
-            if (c) {
-                let cv = document.getElementById('converterUrl').value.trim();
-                if (cv.endsWith('/')) cv = cv.slice(0, -1);
-                const cf = document.getElementById('configUrl').value.trim();
-                document.getElementById('resultUrl').value = cv + "/sub?target=clash&url=" + encodeURIComponent(cl) + "&config=" + encodeURIComponent(cf) + "&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false";
-            } else {
-                document.getElementById('resultUrl').value = cl;
-            }
-        }
-
-        function copyId(id) {
-            navigator.clipboard.writeText(document.getElementById(id).value).then(() => showToast("已复制!"));
-        }
-
-        function checkProxy() {
-            const i = document.getElementById('proxyIp').value.trim();
-            if (i) {
-                navigator.clipboard.writeText(i).then(() => {
-                    alert("ProxyIP 已复制!");
-                    window.open("${PROXY_CHECK_URL}", "_blank");
+            const audioList = [];
+            for (const song of songs) {
+                let lrc = song.lrc || '';
+                if (!lrc || lrc === '') {
+                    try {
+                        // 备用歌词 API
+                        const lrcUrl = 'https://api.uomg.com/api/163/lyric?id=' + song.id;
+                        const lrcRes = await fetch(lrcUrl);
+                        const lrcData = await lrcRes.json();
+                        lrc = lrcData.lyric || '';
+                    } catch(e) {
+                        console.log('获取歌词失败:', song.name);
+                    }
+                }
+                
+                audioList.push({
+                    name: song.name,
+                    artist: song.artist,
+                    url: song.url,
+                    cover: song.pic,
+                    lrc: lrc
                 });
-            } else {
-                window.open("${PROXY_CHECK_URL}", "_blank");
             }
+            
+            aplayer = new APlayer({
+                container: aplayerContainer,
+                audio: audioList,
+                theme: '#49b1f5',
+                loop: 'all',
+                preload: 'auto',
+                volume: 0.7,
+                lrcType: 3
+            });
+            
+            bindAPlayerEvents(aplayer);
+            return aplayer;
+        } catch (error) {
+            console.error('歌单加载失败:', error);
+            throw error;
         }
+    }
 
-        function showToast(m) {
-            const t = document.getElementById('toast');
-            t.innerText = m;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2000);
+    /* 绑定 APlayer 事件 */
+    function bindAPlayerEvents(ap) {
+        if (!ap) return;
+        
+        function updateCover() {
+            try {
+                const info = ap.list.audios[ap.list.index];
+                if (info && info.cover) capsuleCover.src = info.cover;
+            } catch(e) {}
         }
+        
+        ap.on('loadeddata', updateCover);
+        ap.on('listswitch', updateCover);
+        ap.on('play', () => {
+            capsule.classList.add('playing');
+            startLyricsUpdate(ap);
+        });
+        ap.on('pause', () => {
+            capsule.classList.remove('playing');
+            floatingLyrics.classList.remove('show');
+            currentLyric = '';
+        });
+        ap.on('ended', () => {
+            floatingLyrics.classList.remove('show');
+            currentLyric = '';
+        });
+    }
 
-        function logout() {
-            document.cookie = "auth=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/;";
-            location.reload();
+    /* 确保播放器就绪后执行操作 */
+    async function ensurePlayerAndRun(fn) {
+        try {
+            const ap = await initMeting();
+            if (typeof fn === 'function') fn(ap);
+        } catch(err) {
+            console.warn('播放器未就绪：', err);
         }
+    }
 
-        window.onload = () => {
-            updateLink();
-        };
-    </script>
+    /* 点击胶囊：隐藏胶囊、显示播放器 */
+    capsule.addEventListener('click', () => {
+        capsule.style.display = 'none';
+        playerWrap.classList.add('show');
+        initMeting().catch(() => {});
+    });
+
+    /* ================== 右键菜单 ================== */
+    function showRightMenuAt(clientX, clientY) {
+        rightMenu.style.display = 'block';
+        rightMenu.classList.remove('show');
+        requestAnimationFrame(() => {
+            const mw = rightMenu.offsetWidth || 220;
+            const mh = rightMenu.offsetHeight || 280;
+            let left = Math.round(clientX - mw/2);
+            left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+            let top = clientY - mh - 12;
+            if (top < 8) top = clientY + 12;
+            if (top + mh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - mh - 8);
+            rightMenu.style.left = left + 'px';
+            rightMenu.style.top = top + 'px';
+            const arrowLeft = Math.max(12, Math.min(clientX - left, mw - 12));
+            rightMenu.style.setProperty('--arrow-left', arrowLeft + 'px');
+            rightMenu.classList.add('show');
+        });
+    }
+
+    document.addEventListener('contextmenu', (e) => {
+        if (e.ctrlKey) return true;
+        e.preventDefault();
+        showRightMenuAt(e.clientX, e.clientY);
+    });
+
+    function hideRightMenuImmediate() {
+        rightMenu.classList.remove('show');
+        rightMenu.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!rightMenu.contains(e.target)) hideRightMenuImmediate();
+    });
+    document.addEventListener('touchstart', (e) => {
+        if (!rightMenu.contains(e.target)) hideRightMenuImmediate();
+    });
+
+    /* 歌词显示/隐藏控制 */
+    function toggleLyricsVisibility() {
+        lyricsVisible = !lyricsVisible;
+        
+        if (lyricsVisible) {
+            floatingLyrics.classList.add('show');
+            if (aplayer && !aplayer.audio.paused) {
+                startLyricsUpdate(aplayer);
+            }
+        } else {
+            floatingLyrics.classList.remove('show');
+            currentLineEl.textContent = '';
+            nextLineEl.textContent = '';
+            currentLyric = '';
+        }
+        
+        const lyricsMenuItem = document.getElementById('menu-lyrics');
+        lyricsMenuItem.textContent = lyricsVisible ? '📜 隐藏歌词' : '📜 显示歌词';
+        localStorage.setItem('lyricsVisible', lyricsVisible.toString());
+    }
+
+    /* 菜单项绑定 */
+    document.getElementById('menu-play').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.toggle());
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-prev').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.skipBack());
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-next').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.skipForward());
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-volup').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.volume(Math.min((ap.audio.volume || 0.8) + 0.1, 1), true));
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-voldown').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.volume(Math.max((ap.audio.volume || 0.2) - 0.1, 0), true));
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-lyrics').addEventListener('click', () => {
+        toggleLyricsVisibility();
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-support').addEventListener('click', () => {
+        window.open('https://1356666.xyz', '_blank');
+        hideRightMenuImmediate();
+    });
+    document.getElementById('menu-fullscreen').addEventListener('click', () => {
+        hideRightMenuImmediate();
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen().catch(() => {});
+        }
+    });
+    document.getElementById('menu-close').addEventListener('click', () => {
+        ensurePlayerAndRun(ap => ap.pause());
+        playerWrap.classList.remove('show');
+        capsule.style.display = 'flex';
+        hideRightMenuImmediate();
+    });
+
+    /* 预初始化 APlayer */
+    initMeting().catch(() => console.log('APlayer初始化失败'));
+
+    /* 页面加载完成后初始化歌词显示状态 */
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedLyricsVisible = localStorage.getItem('lyricsVisible');
+        if (savedLyricsVisible !== null) {
+            lyricsVisible = savedLyricsVisible === 'true';
+        }
+        const lyricsMenuItem = document.getElementById('menu-lyrics');
+        lyricsMenuItem.textContent = lyricsVisible ? '📜 隐藏歌词' : '📜 显示歌词';
+        if (!lyricsVisible) {
+            floatingLyrics.classList.remove('show');
+        }
+    });
+
+    /* ================== 代理面板功能（保留原有功能） ================== */
+    function toggleClashMode() {
+        const c = document.getElementById('clashMode').checked;
+        document.getElementById('clashSettings').style.display = c ? 'block' : 'none';
+        updateLink();
+    }
+
+    function updateLink() {
+        let b = document.getElementById('subBaseUrl').value.trim();
+        if (b.endsWith('/')) b = b.slice(0, -1);
+        if (!b.startsWith('http')) b = 'https://' + b;
+        
+        const p = document.getElementById('proxyIp').value.trim();
+        const h = HOST;
+        const u = UUID;
+        const c = document.getElementById('clashMode').checked;
+        
+        let rp = "/";
+        if (p) rp = "/proxyip=" + p;
+        
+        const cl = b + "/sub?uuid=" + u + "&path=" + encodeURIComponent(rp);
+        
+        if (c) {
+            let cv = document.getElementById('converterUrl').value.trim();
+            if (cv.endsWith('/')) cv = cv.slice(0, -1);
+            const cf = document.getElementById('configUrl').value.trim();
+            document.getElementById('resultUrl').value = cv + "/sub?target=clash&url=" + encodeURIComponent(cl) + "&config=" + encodeURIComponent(cf) + "&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false";
+        } else {
+            document.getElementById('resultUrl').value = cl;
+        }
+    }
+
+    function copyId(id) {
+        navigator.clipboard.writeText(document.getElementById(id).value).then(() => showToast("已复制!"));
+    }
+
+    function checkProxy() {
+        const i = document.getElementById('proxyIp').value.trim();
+        if (i) {
+            navigator.clipboard.writeText(i).then(() => {
+                alert("ProxyIP 已复制!");
+                window.open("${PROXY_CHECK_URL}", "_blank");
+            });
+        } else {
+            window.open("${PROXY_CHECK_URL}", "_blank");
+        }
+    }
+
+    function showToast(m) {
+        const t = document.getElementById('toast');
+        t.innerText = m;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    function logout() {
+        document.cookie = "auth=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/;";
+        location.reload();
+    }
+
+    window.onload = () => {
+        updateLink();
+    };
+</script>
 </body>
 </html>
   `;
@@ -1113,7 +1147,7 @@ function generateMusicDashboard(host, uuid) {
 
 // 登录页面
 function loginPage() {
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Worker Login</title><style>body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.glass-box{background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.2);padding:40px;border-radius:16px;box-shadow:0 8px 32px 0 rgba(31,38,135,0.37);text-align:center;width:320px}h2{margin-top:0;margin-bottom:20px;font-weight:600;letter-spacing:1px}input{width:100%;padding:14px;margin-bottom:20px;border-radius:8px;border:1px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.2);color:white;box-sizing:border-box;text-align:center;font-size:1rem;outline:none;transition:0.3s}input:focus{background:rgba(0,0,0,0.4);border-color:#a29bfe}button{width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(90deg,#a29bfe,#6c5ce7);color:white;font-weight:bold;cursor:pointer;font-size:1rem;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:0.2s}button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.3)}.social-links{margin-top:25px;display:flex;justify-content:center;gap:15px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px}.social-links a{color:#e2e8f0;text-decoration:none;font-size:0.9rem;padding:8px 16px;background:rgba(0,0,0,0.2);border-radius:20px;border:1px solid rgba(255,255,255,0.15);transition:0.2s;display:flex;align-items:center;gap:5px}.social-links a:hover{background:rgba(255,255,255,0.2);transform:translateY(-2px);border-color:#a29bfe}</style></head><body><div class="glass-box"><h2>🔒 音乐歌单</h2><input type="password" id="pwd" placeholder="请输入密码" autofocus onkeypress="if(event.keyCode===13)verify()"><button onclick="verify()">后台管理</button><div class="social-links"><a href="${TG_CHANNEL_URL}" target="_blank">📢 频道</a><a href="${TG_GROUP_URL}" target="_blank">✈️ 群组</a></div></div><script>function verify(){const p=document.getElementById('pwd').value;const d=new Date();d.setTime(d.getTime()+(7*24*60*60*1000));document.cookie="auth="+p+";expires="+d.toUTCString()+";path=/";location.reload()}</script></body></html>`;
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link rel="icon" type="image/png" href="https://pan.hangdn.com/raw/ico/map64.ico" /><title>Worker Music Login</title><style>body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.glass-box{background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.2);padding:40px;border-radius:16px;box-shadow:0 8px 32px 0 rgba(31,38,135,0.37);text-align:center;width:320px}h2{margin-top:0;margin-bottom:20px;font-weight:600;letter-spacing:1px}input{width:100%;padding:14px;margin-bottom:20px;border-radius:8px;border:1px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.2);color:white;box-sizing:border-box;text-align:center;font-size:1rem;outline:none;transition:0.3s}input:focus{background:rgba(0,0,0,0.4);border-color:#a29bfe}button{width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(90deg,#a29bfe,#6c5ce7);color:white;font-weight:bold;cursor:pointer;font-size:1rem;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:0.2s}button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.3)}.social-links{margin-top:25px;display:flex;justify-content:center;gap:15px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px}.social-links a{color:#e2e8f0;text-decoration:none;font-size:0.9rem;padding:8px 16px;background:rgba(0,0,0,0.2);border-radius:20px;border:1px solid rgba(255,255,255,0.15);transition:0.2s;display:flex;align-items:center;gap:5px}.social-links a:hover{background:rgba(255,255,255,0.2);transform:translateY(-2px);border-color:#a29bfe}</style></head><body><div class="glass-box"><h2>MUSIC 音乐歌单</h2><input type="password" id="pwd" placeholder="请输入密码" autofocus onkeypress="if(event.keyCode===13)verify()"><button onclick="verify()">后台管理</button><div class="social-links"><a href="${TG_CHANNEL_URL}" target="_blank">📢 频道</a><a href="${TG_GROUP_URL}" target="_blank">✈️ 群组</a></div></div><script>function verify(){const p=document.getElementById('pwd').value;const d=new Date();d.setTime(d.getTime()+(7*24*60*60*1000));document.cookie="auth="+p+";expires="+d.toUTCString()+";path=/";location.reload()}</script></body></html>`;
 }
 
 export default {
