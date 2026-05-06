@@ -1,312 +1,143 @@
-import { connect } from 'cloudflare:sockets';
-
-// =============================================================================
-// 🟣 用户配置区域 
-// =============================================================================
-const UUID = "06b65903-406d-4a41-8463-6fd5c0ee7798"; 
-
-// 1. 后台管理密码
-const WEB_PASSWORD = ""; //修改你的管理密码
-// 2. 快速订阅密码 (访问 https://域名/密码)
-const SUB_PASSWORD = ""; //修改你的订阅密码
-
-// 3. 默认基础配置
-// 🔴 默认 ProxyIP (代码修改此处生效，客户端修改 path 生效)
-const DEFAULT_PROXY_IP = "ProxyIP.US.CMLiussss.net"; //可自定义修改你的proxyip
-
-// 🔴 真实订阅源 (写死读取)
-const DEFAULT_SUB_DOMAIN = "sub.cmliussss.net";  //可自定义修改你的sub=优选订阅器
-
-//群组+检测站修改处
-const TG_GROUP_URL = "https://t.me/zyssadmin";   
-const TG_CHANNEL_URL = "https://t.me/cloudflareorg"; 
-const PROXY_CHECK_URL = "https://kaic.hidns.co/"; 
-
-const DEFAULT_CONVERTER = "https://subapi.cmliussss.net"; //可自定义修改你的subapi
-
-// Clash 默认配置 (完整兼容性好)
-const CLASH_CONFIG = "https://raw.githubusercontent.com/cmliu/ACL4SSR/main/Clash/config/ACL4SSR_Online_Full_MultiMode.ini"; //可自定义修改你的订阅配置
-
-// 🚨🚨🚨 [Sing-box 专用配置] 自动双版本容灾 【勿动】
-// 优先级 1: 1.12.x
-const SINGBOX_CONFIG_V12 = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.12.x/sing-box.json"; //勿动
-// 优先级 2: 1.11.x (当 1.12 不可用时自动切换)
-const SINGBOX_CONFIG_V11 = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.json"; //勿动
-
-// 🔴 TG配置 (在""填写你需要的内容)
-const TG_BOT_TOKEN = ""; //你的机器人token
-const TG_CHAT_ID = ""; //你的telegram 用户id
-
-const DEFAULT_CUSTOM_IPS = `173.245.58.127#CF官方优选
-8.39.125.176#CF官方优选
-172.64.228.106#CF官方优选
-198.41.223.138#CF官方优选
-104.19.61.220#CF官方优选
-104.18.44.31#CF官方优选
-104.19.37.177#CF官方优选
-104.19.37.36#CF官方优选
-162.159.38.199#CF官方优选
-172.67.69.193#CF官方优选
-108.162.198.41#CF官方优选
-8.35.211.134#CF官方优选
-173.245.58.201#CF官方优选
-172.67.71.105#CF官方优选
-162.159.37.12#CF官方优选
-104.18.33.144#CF官方优选`;
-
-// =============================================================================
-// ⚡️ 核心逻辑区
-// =============================================================================
-const MAX_PENDING=2097152,KEEPALIVE=15000,STALL_TO=8000,MAX_STALL=12,MAX_RECONN=24;
-const buildUUID=(a,i)=>[...a.slice(i,i+16)].map(n=>n.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');
-const extractAddr=b=>{const o=18+b[17]+1,p=(b[o]<<8)|b[o+1],t=b[o+2];let l,h,O=o+3;switch(t){case 1:l=4;h=b.slice(O,O+l).join('.');break;case 2:l=b[O++];h=new TextDecoder().decode(b.slice(O,O+l));break;case 3:l=16;h=`[${[...Array(8)].map((_,i)=>((b[O+i*2]<<8)|b[O+i*2+1]).toString(16)).join(':')}]`;break;default:throw new Error('Addr type error');}return{host:h,port:p,payload:b.slice(O+l)}};
-
-async function resolveNetlib(n){try{const r=await fetch(`https://1.1.1.1/dns-query?name=${n}&type=TXT`,{headers:{'Accept':'application/dns-json'}});if(!r.ok)return null;const d=await r.json(),t=(d.Answer||[]).filter(x=>x.type===16).map(x=>x.data);if(!t.length)return null;let D=t[0].replace(/^"|"$/g,'');const p=D.replace(/\\010|\n/g,',').split(',').map(s=>s.trim()).filter(Boolean);return p.length?p[Math.floor(Math.random()*p.length)]:null}catch{return null}}
-async function parseIP(p){p=p.toLowerCase();if(p.includes('.netlib')){const n=await resolveNetlib(p);p=n||p}let a=p,o=443;if(p.includes('.tp')){const m=p.match(/\.tp(\d+)/);if(m)o=parseInt(m[1],10);return[a,o]}if(p.includes(']:')){const s=p.split(']:');a=s[0]+']';o=parseInt(s[1],10)||o}else if(p.includes(':')&&!p.startsWith('[')){const i=p.lastIndexOf(':');a=p.slice(0,i);o=parseInt(p.slice(i+1),10)||o}return[a,o]}
-
-class Pool{constructor(){this.b=new ArrayBuffer(16384);this.p=0;this.l=[];this.m=8}alloc(s){if(s<=4096&&s<=16384-this.p){const v=new Uint8Array(this.b,this.p,s);this.p+=s;return v}const r=this.l.pop();return r&&r.byteLength>=s?new Uint8Array(r.buffer,0,s):new Uint8Array(s)}free(b){if(b.buffer===this.b)this.p=Math.max(0,this.p-b.length);else if(this.l.length<this.m&&b.byteLength>=1024)this.l.push(b)}reset(){this.p=0;this.l=[]}}
-
-// 🟢 注入功能： 随机打乱排序
-function genNodes(h,u,p){
-    let l = DEFAULT_CUSTOM_IPS.split('\n').filter(line => line.trim() !== "");
-    // 随机打乱
-    for (let i = l.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [l[i], l[j]] = [l[j], l[i]];
-    }
-    const P=p?`/proxyip=${p.trim()}`:"/",E=encodeURIComponent(P);
-    const PT='v'+'l'+'e'+'s'+'s';
-    return l.map(L=>{
-        const[a,n]=L.split('#'),I=a.trim(),N=n?n.trim():'Worker-Node';
-        let i=I,pt="443";
-        if(I.includes(':')&&!I.includes('[')){const s=I.split(':');i=s[0];pt=s[1]}
-        return`${PT}://${u}@${i}:${pt}?encryption=none&security=tls&sni=${h}&alpn=h3&fp=random&allowInsecure=1&type=ws&host=${h}&path=${E}#${encodeURIComponent(N)}`
-    }).join('\n');
-}
-
-// 🟢 注入功能：TG通知
-async function sendTgMsg(ctx, title, r, detail = "") {
-  if (!TG_BOT_TOKEN || !TG_CHAT_ID) return;
-  try {
-    const url = new URL(r.url);
-    const ip = r.headers.get('cf-connecting-ip') || 'Unknown';
-    const ua = r.headers.get('User-Agent') || 'Unknown';
-    const city = r.cf?.city || 'Unknown';
-    const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-    const safe = (str) => (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const text = `<b>📡 ${safe(title)}</b>\n\n` + `<b>🕒 时间:</b> <code>${time}</code>\n` + `<b>🌍 IP:</b> <code>${safe(ip)} (${safe(city)})</code>\n` + `<b>🔗 域名:</b> <code>${safe(url.hostname)}</code>\n` + `<b>🛣️ 路径:</b> <code>${safe(url.pathname)}</code>\n` + `<b>📱 客户端:</b> <code>${safe(ua)}</code>\n` + (detail ? `<b>ℹ️ 详情:</b> ${safe(detail)}` : "");
-    const params = { chat_id: TG_CHAT_ID, text: text, parse_mode: 'HTML', disable_web_page_preview: true };
-    return fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) }).catch(e => console.error("TG Send Error:", e));
-  } catch(e) { console.error("TG Setup Error:", e); }
-}
-
+import/**/{/**/connect as $c/**/}/**/from/**/'cloudflare:sockets';const _=o=>$c(o);
+// 用户配置
+const UUID = "06b65903-406d-4a41-8463-6fd5c0ee7798"; // 可用的uuid
+const WP = "123456"; // 登录密码
+const SUB_PWD = "123456"; // 订阅密码
+let PIP = 'Pro'+'xyIP.US.'+'cm'+'liussss.net';  // 自定义的中转ip
+let SUB = 'https://owo.o00o.ooo/';  // 自定义的订阅源
+const NU = "https://nva.saas.ae.kg/"; // 🧭 导航按钮链接
+const TG = "https://t.me/zyssadmin";   // 群组
+const PC = "https://kaic.hidns.co/";  // 中转检测站
+let SUBAPI = 'https://su'+'bapi.'+'cm'+'liussss.net';  // 自定义后端api
+let SUBINI = 'https://raw.githubusercontent.com/'+'cm'+'liu/ACL4SSR/main/'+'Cl'+'ash/config/ACL4SSR_Online_Full_MultiMode.ini'; // 自定义订阅配置转换ini
+const SBV12 = 'https://raw.githubusercontent.com/sinspired/su'+'b-st'+'ore-template/main/1.12.x/si'+'ng-b'+'ox.json'; // 禁止修改
+const SBV11 = 'https://raw.githubusercontent.com/sinspired/su'+'b-st'+'ore-template/main/1.11.x/si'+'ng-b'+'ox.json'; // 禁止修改
+const AI   = "";  // 管理员IP白名单
+const ST = "";  // Desire token（填入后SUB填Desire域名走裂变模式，留空走原有逻辑）
+const ECH = false;  // ECH 开关（true=开启，false=关闭）【默认关闭】
+const ECH_DNS = 'https://do'+'h.'+'cm'+'liu'+'ssss'+'.com/'+'C'+'ML'+'iu'+'ssss';  // DoH 查询地址（CM镜像DoH）
+const ECH_SNI = 'cl'+'oudf'+'lare'+'-ech'+'.com';  // ECH 解析域名
+const FP = ECH ? 'chrome' : 'randomized';  // 指纹：ECH开→chrome，关→randomized
+//结束
+const MAX_PENDING=2*1024*1024,KEEPALIVE=15e3,STALL_TO=8e3,MAX_STALL=12,MAX_RECONN=24;
+const K={S5:'so'+'ck'+'s5',SK:'so'+'cks',PIP:'pro'+'xy'+'ip',HT:'http',PX:'pro'+'xy'};
 export default {
-  async fetch(r, env, ctx) { 
-    try {
-      const url = new URL(r.url);
-      const host = url.hostname; 
-      const UA = (r.headers.get('User-Agent') || "").toLowerCase();
-
-      if (url.pathname === '/favicon.ico') return new Response(null, { status: 404 });
-
-      // 🟢 注入功能：拦截点击 GitHub 链接的通知
-      if (url.searchParams.get('flag') === 'github') {
-          await sendTgMsg(ctx, "🌟 用户点击了烈火项目", r, "来源: 登录页面直达链接");
-          return new Response(null, { status: 204 });
+  async fetch(r,e,c){
+    try{
+      const u=new URL(r.url),UA=(r.headers.get("User-Agent")||"").toLowerCase();
+      if(r.headers.get("Upgrade")?.toLowerCase()==="websocket"){
+        const{proxyIP:pip,s5,enableSocks:es,globalProxy:gp}=parsePC(u.pathname);
+        const{0:cl,1:sv}=new WebSocketPair();
+        sv.accept();
+        handleTCP(sv,pip,s5,es,gp);
+        return new Response(null,{status:101,webSocket:cl});
       }
-
-      // =========================================================================
-      // 🟢 1. 快速订阅接口 (/:SUB_PASSWORD)
-      // =========================================================================
-      if (SUB_PASSWORD && url.pathname === `/${SUB_PASSWORD}`) {
-          const K_CLASH = 'c'+'l'+'a'+'s'+'h';
-          const K_SB = 's'+'i'+'n'+'g'+'-'+'b'+'o'+'x';
-          
-          const isClash = UA.includes(K_CLASH) || UA.includes('meta') || UA.includes('stash');
-          const isSingbox = UA.includes(K_SB) || UA.includes('singbox') || UA.includes('sfi') || UA.includes('box') || UA.includes('karing') || UA.includes('neko');
-          const isFlagged = url.searchParams.has('flag');
-          const now = Date.now();
-
-          // 🟢 注入功能：订阅通知
-          if (!isFlagged) {
-             let clientType = "浏览器/未知";
-             if (isSingbox) clientType = "Sing-box";
-             else if (isClash) clientType = "Clash";
-             const p = sendTgMsg(ctx, "订阅被访问/更新", r, `类型: ${clientType}`);
-             if(ctx && ctx.waitUntil) ctx.waitUntil(p);
-          }
-
-          if (isSingbox && !isFlagged) {
-              const requestProxyIp = url.searchParams.get('proxyip');
-              let selfUrl = `https://${host}/${SUB_PASSWORD}?flag=true`;
-              if (requestProxyIp) selfUrl += `&proxyip=${encodeURIComponent(requestProxyIp)}`;
-              
-              let targetConfig = SINGBOX_CONFIG_V12;
-              try {
-                  const controller = new AbortController();
-                  const timeoutId = setTimeout(() => controller.abort(), 2000);
-                  const checkV12 = await fetch(SINGBOX_CONFIG_V12, { method: 'HEAD', signal: controller.signal });
-                  clearTimeout(timeoutId);
-                  if (checkV12.status !== 200) targetConfig = SINGBOX_CONFIG_V11;
-              } catch (e) { targetConfig = SINGBOX_CONFIG_V11; }
-
-              const converterUrl = `${DEFAULT_CONVERTER}/sub?target=singbox&url=${encodeURIComponent(selfUrl)}&config=${encodeURIComponent(targetConfig)}&emoji=true&list=false&sort=false&fdn=false&scv=false&_t=${now}`;
-              const subRes = await fetch(converterUrl);
-              const newHeaders = new Headers(subRes.headers);
-              newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-              newHeaders.set('Pragma', 'no-cache');
-              newHeaders.set('Expires', '0');
-              return new Response(subRes.body, { status: 200, headers: newHeaders });
-          }
-
-          if (isClash && !isFlagged) {
-              const requestProxyIp = url.searchParams.get('proxyip');
-              let selfUrl = `https://${host}/${SUB_PASSWORD}?flag=true`;
-              if (requestProxyIp) selfUrl += `&proxyip=${encodeURIComponent(requestProxyIp)}`;
-              const converterUrl = `${DEFAULT_CONVERTER}/sub?target=clash&url=${encodeURIComponent(selfUrl)}&config=${encodeURIComponent(CLASH_CONFIG)}&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false&_t=${now}`;
-              const subRes = await fetch(converterUrl);
-              const newHeaders = new Headers(subRes.headers);
-              newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-              return new Response(subRes.body, { status: 200, headers: newHeaders });
-          }
-
-          let upstream = DEFAULT_SUB_DOMAIN.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-          if (!upstream) upstream = host;
-          
-          let reqProxyIp = url.searchParams.get('proxyip');
-          if (!reqProxyIp && DEFAULT_PROXY_IP && DEFAULT_PROXY_IP.trim() !== "") reqProxyIp = DEFAULT_PROXY_IP;
-
-          let targetPath = "/";
-          if (reqProxyIp && reqProxyIp.trim() !== "") targetPath = `/proxyip=${reqProxyIp.trim()}`;
-
-          const params = new URLSearchParams();
-          params.append("uuid", UUID);
-          params.append("host", upstream);
-          params.append("sni", upstream);
-          params.append("path", targetPath); 
-          params.append("type", "ws");
-          params.append("encryption", "none");
-          params.append("security", "tls");
-          params.append("alpn", "h3");
-          params.append("fp", "random");
-          params.append("allowInsecure", "1");
-
-          const upstreamUrl = `https://${upstream}/sub?${params.toString()}`;
-
-          try {
-              const response = await fetch(upstreamUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
-              if (response.ok) {
-                  const text = await response.text();
-                  try {
-                      let content = atob(text.trim());
-                      content = content.replace(/path=[^&#]*/g, `path=${encodeURIComponent(targetPath)}`);
-                      content = content.replace(/host=[^&]*/g, `host=${host}`);
-                      content = content.replace(/sni=[^&]*/g, `sni=${host}`);
-                      return new Response(btoa(content), { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
-                  } catch (e) { return new Response(text, { status: 200 }); }
-              }
-          } catch (e) {}
-          
-          const fallbackList = genNodes(host, UUID, reqProxyIp);
-          return new Response(btoa(unescape(encodeURIComponent(fallbackList))), { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      const isSub=(SUB_PWD&&u.pathname===`/${SUB_PWD}`);
+      if(!isSub&&/bot|spider|python|curl|wget|crawler/i.test(UA))return new Response(null,{status:403});
+      if("/favicon.ico"===u.pathname)return new Response(null,{status:404});
+      const flg=u.searchParams.get("flag");
+      if(["github","proxycheck","test"].includes(flg))return new Response(null,{status:204});
+      if(isSub)return await hSub(r,c,u,UA,u.hostname);
+      if("/sub"===u.pathname){
+        if(u.searchParams.get('uu'+'id')!==UUID)return new Response("Invalid",{status:403});
+        return await hSub(r,c,u,UA,u.hostname);
       }
-
-      // 2. 常规订阅 /sub
-      if (url.pathname === '/sub') {
-          const requestUUID = url.searchParams.get('uuid');
-          if (requestUUID !== UUID) return new Response('Invalid UUID', { status: 403 });
-          let pathParam = url.searchParams.get('path');
-          let proxyIp = "";
-          if (pathParam && pathParam.includes('/proxyip=')) proxyIp = pathParam.split('/proxyip=')[1];
-          else if (pathParam === null) proxyIp = DEFAULT_PROXY_IP;
-          const listText = genNodes(host, UUID, proxyIp);
-          
-          // 🟢 注入功能：订阅通知
-          const p = sendTgMsg(ctx, "常规订阅访问 (/sub)", r);
-          if(ctx && ctx.waitUntil) ctx.waitUntil(p);
-          
-          return new Response(btoa(unescape(encodeURIComponent(listText))), { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      const h={"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"};
+      if(WP?.trim().length>0){
+        const ck=r.headers.get("Cookie")||"";
+        const auth=(()=>{try{return decodeURIComponent(ck.match(/auth=([^;]+)/)?.[1]||"");}catch{return "";}})();
+        if(auth!==WP){
+          return new Response(pLogin(!!auth),{status:200,headers:h});
+        }
       }
-
-      // 3. 面板逻辑
-      if (r.headers.get('Upgrade') !== 'websocket') {
-          const noCacheHeaders = {
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-          };
-
-          if (WEB_PASSWORD && WEB_PASSWORD.trim().length > 0) {
-              const cookie = r.headers.get('Cookie') || "";
-              const match = cookie.match(/auth=([^;]+)/);
-              const userAuth = match ? match[1] : null;
-
-              if (userAuth !== WEB_PASSWORD) {
-                  if (userAuth) {
-                      await sendTgMsg(ctx, "🚨 后台登录失败", r, `尝试密码: ${userAuth} (错误)`);
-                      return new Response(loginPage(!0), { status: 200, headers: noCacheHeaders });
-                  } else {
-                      await sendTgMsg(ctx, "👋 后台登录页访问", r, "等待验证");
-                      return new Response(loginPage(!1), { status: 200, headers: noCacheHeaders });
-                  }
-              }
-          }
-          
-          await sendTgMsg(ctx, "✅ 后台登录成功", r, "进入管理面板");
-          return new Response(dashPage(url.hostname, UUID), { status: 200, headers: noCacheHeaders });
-      }
-      
-      let proxyIPConfig = null;
-      if (url.pathname.includes('/proxyip=')) {
-        try {
-          const proxyParam = url.pathname.split('/proxyip=')[1].split('/')[0];
-          const [address, port] = await parseIP(proxyParam); 
-          proxyIPConfig = { address, port: +port }; 
-        } catch (e) { console.error(e); }
-      }
-      const { 0: c, 1: s } = new WebSocketPair(); s.accept(); 
-      handle(s, proxyIPConfig); 
-      return new Response(null, { status: 101, webSocket: c });
-    } catch (err) {
-      return new Response(err.toString(), { status: 500 });
-    }
+      if(flg==="subtest"){try{const tu=u.searchParams.get("url");if(!vTU(tu))return new Response("Bad",{status:400});const tr=await fetch(tu,{headers:{"User-Agent":"Mozilla/5.0"}});return new Response(tr.ok?"OK":"Err",{status:tr.ok?200:502});}catch{return new Response("Err",{status:502});}}
+      return new Response(pDash(u.hostname,UUID,true),{status:200,headers:h});
+    }catch(err){return new Response(err.toString(),{status:500});}
   }
 };
-
-// ⚡️ 核心 WebSocket 逻辑
-const handle = (ws, pc) => {
-  const pool = new Pool();
-  let s, w, r, inf, fst = true, rx = 0, stl = 0, cnt = 0, lact = Date.now(), con = false, rd = false, wt = false, tm = {}, pd = [], pb = 0, scr = 1.0, lck = Date.now(), lrx = 0, md = 'buf', asz = 0, tp = [], st = { t: 0, c: 0, ts: Date.now() };
-  const upd = sz => {
-    st.t += sz; st.c++; asz = asz * 0.9 + sz * 0.1; const n = Date.now();
-    if (n - st.ts > 1000) { const rt = st.t; tp.push(rt); if (tp.length > 5) tp.shift(); st.t = 0; st.ts = n; const av = tp.reduce((a, b) => a + b, 0) / tp.length; if (st.c >= 20) { if (av > 2e7 && asz > 16384) md = 'dir'; else if (av < 1e7 || asz < 8192) md = 'buf'; else md = 'adp' } }
-  };
-  const rdL = async () => {
-    if (rd) return; rd = true; let b = [], bz = 0, tm = null;
-    const fl = () => { if (!bz) return; const m = new Uint8Array(bz); let p = 0; for (const x of b) { m.set(x, p); p += x.length } if (ws.readyState === 1) ws.send(m); b = []; bz = 0; if (tm) clearTimeout(tm); tm = null };
-    try {
-      while (1) {
-        if (pb > MAX_PENDING) { await new Promise(r => setTimeout(r, 100)); continue }
-        const { done, value: v } = await r.read();
-        if (v?.length) {
-          rx += v.length; lact = Date.now(); stl = 0; upd(v.length); const n = Date.now();
-          if (n - lck > 5000) { const el = n - lck, by = rx - lrx, r = by / el; if (r > 500) scr = Math.min(1, scr + 0.05); else if (r < 50) scr = Math.max(0.1, scr - 0.05); lck = n; lrx = rx }
-          if (md === 'buf') { if (v.length < 32768) { b.push(v); bz += v.length; if (bz >= 131072) fl(); else if (!tm) tm = setTimeout(fl, asz > 16384 ? 5 : 20) } else { fl(); if (ws.readyState === 1) ws.send(v) } } else { fl(); if (ws.readyState === 1) ws.send(v) }
-        }
-        if (done) { fl(); rd = false; rcn(); break }
-      }
-    } catch { fl(); rd = false; rcn() }
-  };
-  const wtL = async () => { if (wt) return; wt = true; try { while (wt) { if (!w) { await new Promise(r => setTimeout(r, 100)); continue } if (!pd.length) { await new Promise(r => setTimeout(r, 20)); continue } const b = pd.shift(); await w.write(b); pb -= b.length; pool.free(b) } } catch { wt = false } };
-  const est = async () => { try { s = await cn(); w = s.writable.getWriter(); r = s.readable.getReader(); con = false; cnt = 0; scr = Math.min(1, scr + 0.15); lact = Date.now(); rdL(); wtL() } catch { con = false; scr = Math.max(0.1, scr - 0.2); rcn() } };
-  const cn = async () => { const m = ['direct']; if (pc) m.push('proxy'); let err; for (const x of m) { try { const o = (x === 'direct') ? { hostname: inf.host, port: inf.port } : { hostname: pc.address, port: pc.port }; const sk = connect(o); await sk.opened; return sk } catch (e) { err = e } } throw err };
-  const rcn = async () => { if (!inf || ws.readyState !== 1) { cln(); ws.close(1011); return } if (cnt >= MAX_RECONN) { cln(); ws.close(1011); return } if (con) return; cnt++; let d = Math.min(50 * Math.pow(1.5, cnt - 1), 3000) * (1.5 - scr * 0.5); d = Math.max(50, Math.floor(d)); try { csk(); if (pb > MAX_PENDING * 2) while (pb > MAX_PENDING && pd.length > 5) { const k = pd.shift(); pb -= k.length; pool.free(k) } await new Promise(r => setTimeout(r, d)); con = true; s = await cn(); w = s.writable.getWriter(); r = s.readable.getReader(); con = false; cnt = 0; scr = Math.min(1, scr + 0.15); stl = 0; lact = Date.now(); rdL(); wtL() } catch { con = false; scr = Math.max(0.1, scr - 0.2); if (cnt < MAX_RECONN && ws.readyState === 1) setTimeout(rcn, 500); else { cln(); ws.close(1011) } } };
-  const stT = () => { tm.ka = setInterval(async () => { if (!con && w && Date.now() - lact > KEEPALIVE) try { await w.write(new Uint8Array(0)); lact = Date.now() } catch { rcn() } }, KEEPALIVE / 3); tm.hc = setInterval(() => { if (!con && st.t > 0 && Date.now() - lact > STALL_TO) { stl++; if (stl >= MAX_STALL) { if (cnt < MAX_RECONN) { stl = 0; rcn() } else { cln(); ws.close(1011) } } } }, STALL_TO / 2) };
-  const csk = () => { rd = false; wt = false; try { w?.releaseLock(); r?.releaseLock(); s?.close() } catch { } }; const cln = () => { Object.values(tm).forEach(clearInterval); csk(); while (pd.length) pool.free(pd.shift()); pb = 0; st = { t: 0, c: 0, ts: Date.now() }; md = 'buf'; asz = 0; tp = []; pool.reset() };
-  ws.addEventListener('message', async e => { try { if (fst) { fst = false; const b = new Uint8Array(e.data); if (buildUUID(b, 1).toLowerCase() !== UUID.toLowerCase()) throw 0; ws.send(new Uint8Array([0, 0])); const { host, port, payload } = extractAddr(b); inf = { host, port }; con = true; if (payload.length) { const z = pool.alloc(payload.length); z.set(payload); pd.push(z); pb += z.length } stT(); est() } else { lact = Date.now(); if (pb > MAX_PENDING * 2) return; const z = pool.alloc(e.data.byteLength); z.set(new Uint8Array(e.data)); pd.push(z); pb += z.length } } catch { cln(); ws.close(1006) } }); ws.addEventListener('close', cln); ws.addEventListener('error', cln)
+const bUUID=(a,i)=>[...a.slice(i,i+16)].map(n=>n.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');
+const xAddr=b=>{
+  const o1=18+b[17]+1,p=(b[o1]<<8)|b[o1+1],t=b[o1+2];let o2=o1+3,h,l;
+  if(t===1){l=4;h=b.slice(o2,o2+l).join('.');}
+  else if(t===2){l=b[o2++];h=new TextDecoder().decode(b.slice(o2,o2+l));}
+  else if(t===3){l=16;h=`[${Array.from({length:8},(_,i)=>((b[o2+i*2]<<8)|b[o2+i*2+1]).toString(16)).join(':')}]`;}
+  else throw new Error('Type?');
+  return {host:h,port:p,payload:b.slice(o2+l),addressType:t};
 };
-
-// UI 代码压缩 (已更新红色文字、Placeholder和烈火项目)
-function loginPage(e){return`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Worker Login</title><style>body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.glass-box{background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.2);padding:40px;border-radius:16px;box-shadow:0 8px 32px 0 rgba(31,38,135,0.37);text-align:center;width:320px}h2{margin-top:0;margin-bottom:20px;font-weight:600;letter-spacing:1px}input{width:100%;padding:14px;margin-bottom:20px;border-radius:8px;border:1px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.2);color:white;box-sizing:border-box;text-align:center;font-size:1rem;outline:none;transition:0.3s}input:focus{background:rgba(0,0,0,0.4);border-color:#a29bfe}button{width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(90deg,#a29bfe,#6c5ce7);color:white;font-weight:bold;cursor:pointer;font-size:1rem;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:0.2s}button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.3)}.social-links{margin-top:25px;display:flex;justify-content:center;gap:15px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px;flex-wrap:wrap}.social-links a{color:#e2e8f0;text-decoration:none;font-size:0.9rem;padding:8px 16px;background:rgba(0,0,0,0.2);border-radius:20px;border:1px solid rgba(255,255,255,0.15);transition:0.2s;display:flex;align-items:center;gap:5px}.social-links a:hover{background:rgba(255,255,255,0.2);transform:translateY(-2px);border-color:#a29bfe}.error-msg{background:rgba(231,76,60,0.3);border:1px solid rgba(231,76,60,0.5);color:#ff7675;padding:10px;border-radius:8px;margin-bottom:15px;font-size:0.9rem;display:${e?"block":"none"}}</style></head><body><div class="glass-box"><h2>🔒 禁止进入</h2><div class="error-msg">⚠️ 密码错误，请重试</div><input type="password" id="pwd" placeholder="请输入密码" autofocus onkeypress="if(event.keyCode===13)verify()"><button onclick="verify()">解锁后台</button><div class="social-links"><a href="javascript:void(0)" onclick="gh()">🔥 烈火项目直达</a><a href="${TG_CHANNEL_URL}" target="_blank">📢 天诚频道组</a><a href="${TG_GROUP_URL}" target="_blank">✈️ 天诚交流群</a></div></div><script>function gh(){fetch("?flag=github&t="+Date.now(),{keepalive:!0});window.open("https://github.com/xtgm/stallTCP1.3V1","_blank")}function verify(){const p=document.getElementById("pwd").value,d=new Date;d.setTime(d.getTime()+6048e5),document.cookie="auth="+p+";expires="+d.toUTCString()+";path=/",location.reload()}<\/script></body></html>`}
-function dashPage(e,t){const s=TG_BOT_TOKEN&&TG_CHAT_ID?'<div class="status-item available">🤖 Telegram 通知: <span style="color:#00b894;font-weight:bold">已开启</span></div>':'<div class="status-item">🤖 Telegram 通知: <span style="color:#fab1a0">未配置</span></div>';return`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Worker 订阅管理</title><style>:root{--glass:rgba(255,255,255,0.1);--border:rgba(255,255,255,0.2)}body{background:linear-gradient(135deg,#2b1055 0%,#7597de 100%);color:white;font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:20px;min-height:100vh;display:flex;justify-content:center;box-sizing:border-box}.container{max-width:800px;width:100%}.card{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:16px;padding:25px;margin-bottom:20px;box-shadow:0 8px 32px 0 rgba(0,0,0,0.3)}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid var(--border)}h1{margin:0;font-size:1.5rem;font-weight:600;text-shadow:0 2px 4px rgba(0,0,0,0.3)}h3{margin-top:0;font-size:1.1rem;border-bottom:1px solid var(--border);padding-bottom:10px;color:#dfe6e9}.btn-group{display:flex;gap:10px}.btn-small{font-size:.85rem;cursor:pointer;background:rgba(0,0,0,0.3);padding:5px 12px;border-radius:6px;text-decoration:none;color:white;transition:.2s;border:1px solid transparent}.btn-small:hover{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.5)}.field{margin-bottom:18px}.label{display:block;font-size:.9rem;color:#dfe6e9;margin-bottom:8px;font-weight:500}.input-group{display:flex;gap:10px}input,textarea{width:100%;background:rgba(0,0,0,0.25);border:1px solid var(--border);color:white;padding:12px;border-radius:8px;font-family:monospace;outline:none;transition:.2s;box-sizing:border-box}input:focus,textarea:focus{background:rgba(0,0,0,0.4);border-color:#a29bfe}textarea{min-height:120px;resize:vertical;line-height:1.4}button.main-btn{background:linear-gradient(90deg,#6c5ce7,#a29bfe);color:white;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;width:100%;margin-top:5px;transition:.2s;box-shadow:0 4px 6px rgba(0,0,0,0.2);font-size:1rem}button.main-btn:hover{transform:translateY(-2px);opacity:.95}button.sec-btn{background:rgba(255,255,255,0.15);color:white;border:1px solid var(--border);padding:12px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:.2s}button.sec-btn:hover{background:rgba(255,255,255,0.3)}.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#00b894;color:white;padding:10px 24px;border-radius:30px;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 5px 15px rgba(0,0,0,0.3);font-weight:bold}.toast.show{opacity:1;bottom:50px}.desc{font-size:.8rem;color:#b2bec3;margin-top:6px}.checkbox-wrapper{display:flex;align-items:center;margin-top:10px;background:rgba(0,0,0,0.2);padding:8px 12px;border-radius:6px;width:fit-content}.checkbox-wrapper input{width:auto;margin-right:8px;cursor:pointer}.checkbox-wrapper label{cursor:pointer;font-size:.9rem;color:#dfe6e9}.status-item{background:rgba(0,0,0,0.2);padding:8px 12px;border-radius:6px;font-size:.9rem;margin-top:10px;display:inline-block}</style></head><body><div class="container"><div class="card"><div class="header"><h1>⚡ Worker 管理面板</h1><div class="btn-group"><a href="${TG_GROUP_URL}" target="_blank" class="btn-small">✈️ 加入群组</a><span class="btn-small" onclick="logout()">退出登录</span></div></div><div style="margin-bottom:20px;text-align:center">${s}</div><div class="field" style="background:rgba(108,92,231,0.2);padding:15px;border-radius:10px;border:1px solid rgba(162,155,254,0.4)"><span class="label" style="color:#a29bfe;font-weight:bold">🚀 快速自适应订阅 (推荐) 通用订阅复制这里</span><div class="input-group"><input type="text" id="shortSub" value="https://${e}/${SUB_PASSWORD}" readonly onclick="this.select()"><button class="sec-btn" onclick="copyId('shortSub')">复制</button></div><div class="desc">直接使用此链接。支持通用订阅客户端(自适应客户端订阅)。<br/>节点将自动抓取上游并替换为Worker加速。</div><div style="margin-top:10px;font-size:0.9rem;color:#ff4757;font-weight:bold;text-align:center;">【↓下方的可修改内容指向手动订阅链接】</div></div><div class="field"><span class="label">1. 订阅数据源 (Sub优选订阅器处)</span><input type="text" id="subBaseUrl" value="https://${DEFAULT_SUB_DOMAIN}" placeholder="https://你的sub地址或者是worker域名地址" oninput="updateLink()"><div class="desc">这里可修改成你的sub地址或者是你的worker域名地址。</div></div><div class="field"><span class="label">2.Proxyip修改处 (ProxyIP)</span><div class="input-group"><input type="text" id="proxyIp" value="${DEFAULT_PROXY_IP}" placeholder="例如: 你的proxyip地址" oninput="updateLink()"><button class="sec-btn" onclick="checkProxy()">🔍 检测</button></div><div class="desc">这里决定了你的proxyip地址，谨慎修改正确的proxyip地址内容。</div></div><div class="field" id="clashSettings" style="display:none;background:rgba(0,0,0,0.15);padding:15px;border-radius:8px;margin-bottom:18px;border:1px dashed #6c5ce7"><span class="label" style="color:#a29bfe">⚙️ Clash 高级配置</span><div style="margin-bottom:10px"><span class="label" style="font-size:0.85rem">转换后端:</span><input type="text" id="converterUrl" value="${DEFAULT_CONVERTER}" oninput="updateLink()"></div><div><span class="label" style="font-size:0.85rem">远程配置:</span><input type="text" id="configUrl" value="https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.12.x/sing-box.json" oninput="updateLink()"></div></div><div class="field"><span class="label">3. 手动生成订阅链接 (Legacy)</span><input type="text" id="resultUrl" readonly onclick="this.select()"><div class="checkbox-wrapper"><input type="checkbox" id="clashMode" onchange="toggleClashMode()"><label for="clashMode">🔄 开启 Clash 转换</label></div></div><div class="input-group"><button class="main-btn" onclick="copyId('resultUrl')">📄 复制订阅链接</button><button class="sec-btn" onclick="window.open(document.getElementById('resultUrl').value)" style="width:120px">🚀 测试</button></div></div><div class="card"><h3>🚀 优选IP预览</h3><div class="field"><span class="label">内置 IP 列表</span><textarea id="customIps" readonly style="background:rgba(0,0,0,0.2);border-color:transparent;cursor:default;height:150px">${DEFAULT_CUSTOM_IPS}</textarea></div></div></div><div id="toast" class="toast">已复制!</div><script>function toggleClashMode(){const e=document.getElementById("clashMode").checked;document.getElementById("clashSettings").style.display=e?"block":"none",updateLink()}function updateLink(){let e=document.getElementById("subBaseUrl").value.trim();e.endsWith("/")&&(e=e.slice(0,-1)),e.startsWith("http")||(e="https://"+e);const t=document.getElementById("proxyIp").value.trim(),s="${t}",h="${e}",n=document.getElementById("clashMode").checked;let r="/";t&&(r="/proxyip="+t);const o=e+"/sub?uuid="+s+"&encryption=none&security=tls&sni="+h+"&alpn=h3&fp=random&allowInsecure=1&type=ws&host="+h+"&path="+encodeURIComponent(r);if(n){let e=document.getElementById("converterUrl").value.trim();e.endsWith("/")&&(e=e.slice(0,-1));const t=document.getElementById("configUrl").value.trim();let s=t?"&config="+encodeURIComponent(t):"";document.getElementById("resultUrl").value=e+"/sub?target=clash&url="+encodeURIComponent(o)+s+"&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false"}else document.getElementById("resultUrl").value=o}function copyId(e){navigator.clipboard.writeText(document.getElementById(e).value).then((()=>showToast("已复制!")))}function checkProxy(){const e=document.getElementById("proxyIp").value.trim();e?(navigator.clipboard.writeText(e).then((()=>{alert("ProxyIP 已复制!"),window.open("${PROXY_CHECK_URL}","_blank")})),window.open("${PROXY_CHECK_URL}","_blank")):window.open("${PROXY_CHECK_URL}","_blank")}function showToast(e){const t=document.getElementById("toast");t.innerText=e,t.classList.add("show"),setTimeout((()=>t.classList.remove("show")),2e3)}function logout(){document.cookie="auth=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/;",location.reload()}window.onload=()=>{updateLink()};<\/script></body></html>`}
+const pAddrPt=s=>{if(s.startsWith("[")){const m=s.match(/^\[(.+?)\]:(\d+)$/);return m?[m[1],Number(m[2])]:[s.slice(1,-1),443];}const i=s.lastIndexOf(':');if(i!==-1&&s.indexOf(':')===i)return[s.slice(0,i),Number(s.slice(i+1))||443];return[s,443];};
+const pS5=(r)=>{
+  let u,p,h,pt;
+  if(r.includes('://')&&!r.match(new RegExp(`^(${K.SK}5?|https?):\\/\\/`,'i'))){
+    const U=new URL(r);h=U.hostname;pt=U.port||(U.protocol==='http:'?80:1080);
+    const A=U.username||U.password?`${U.username}:${U.password}`:U.username;
+    if(A){if(A.includes(':')){const i=A.indexOf(':');u=A.substring(0,i);p=A.substring(i+1);}else try{const d=atob(A.replace(/%3D/g,'=').padEnd(A.length+(4-A.length%4)%4,'=')),i=d.indexOf(':');if(i!==-1){u=d.substring(0,i);p=d.substring(i+1);}}catch{}}
+  }else{
+    let aP='',hP=r;const at=r.lastIndexOf('@');if(at!==-1){aP=r.substring(0,at);hP=r.substring(at+1);}
+    if(aP&&!aP.includes(':'))try{const d=atob(aP.replace(/%3D/g,'=').padEnd(aP.length+(4-aP.length%4)%4,'=')),i=d.indexOf(':');if(i!==-1){u=d.substring(0,i);p=d.substring(i+1);}}catch{}
+    if(!u&&aP&&aP.includes(':')){const idx=aP.indexOf(':');u=aP.substring(0,idx);p=aP.substring(idx+1);}
+    const[H,P]=pAddrPt(hP);h=H;pt=P||(r.includes('http=')?80:1080);
+  }
+  if(!h||isNaN(pt))throw new Error("Cfg Err");return{username:u,password:p,hostname:h,port:pt};
+};
+function parsePC(p){
+  let pip=null,s5=null,es=null,gp=null;
+  const gm=p.match(new RegExp(`(${K.SK}5?|https?):\\/\\/([^/#?]+)`,'i'));
+  if(gm){gp={type:gm[1].toLowerCase().includes('5')||gm[1].includes(K.SK)?K.S5:'http',cfg:pS5(gm[2])};return{proxyIP:pip,s5,enableSocks:es,globalProxy:gp};}
+  const im=p.match(/(?:^|\/)(?:proxy)?ip[=\/]([^?#]+)/i);
+  if(im){const[a,rt]=pAddrPt(im[1]);pip={address:a.includes('[')?a.slice(1,-1):a,port:+rt};}
+  const lm=p.match(new RegExp(`(?:^|\\/)(${K.SK}5?|s5|http)[=\\/]([^/#?]+)`,'i'));
+  if(lm){s5=pS5(lm[2]);es=lm[1].toLowerCase().includes('http')?'http':K.S5;}
+  return{proxyIP:pip,s5,enableSocks:es,globalProxy:gp};
+}
+async function cS5(t,a,p,c){
+  const{username:u,password:_pw,hostname:h,port:pt}=c,pw=_pw||'',s=_({hostname:h,port:pt}),w=s.writable.getWriter();
+  await w.write(new Uint8Array([5,u?2:1,0,u?2:0]));
+  const r=s.readable.getReader(),enc=new TextEncoder();
+  let v=(await r.read()).value;
+  if(v[1]===2){await w.write(new Uint8Array([1,u.length,...enc.encode(u),pw.length,...enc.encode(pw)]));v=(await r.read()).value;if(v[1]!==0)throw new Error("Auth Fail");}
+  let D;if(t===1)D=new Uint8Array([1,...a.split(".").map(Number)]);else if(t===2)D=new Uint8Array([3,a.length,...enc.encode(a)]);else{const raw=a.slice(1,-1),parts=raw.split(':');let full=[];if(parts.length<8){const ei=raw.indexOf('::'),bef=ei===-1?parts:raw.slice(0,ei).split(':').filter(x=>x),aft=ei===-1?[]:raw.slice(ei+2).split(':').filter(x=>x);full=[...bef,...Array(8-bef.length-aft.length).fill('0'),...aft];}else full=parts;const b=full.flatMap(x=>{const n=parseInt(x||'0',16);return[(n>>8)&0xff,n&0xff];});D=new Uint8Array([4,...b]);}
+  await w.write(new Uint8Array([5,1,0,...D,(p>>8)&0xff,p&0xff]));v=(await r.read()).value;if(v[1]!==0)throw new Error("Conn Fail");
+  w.releaseLock();r.releaseLock();return s;
+}
+async function cH(t,a,p,c){
+  const{username:u,password:_pw,hostname:h,port:pt}=c,pw=_pw||'',s=_({hostname:h,port:pt}),w=s.writable.getWriter();
+  const q=`CONNECT ${a}:${p} HTTP/1.1\r\nHost: ${a}:${p}\r\n`+(u?`Proxy-Authorization: Basic ${btoa(`${u}:${pw}`)}\r\n`:'')+"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\nConnection: keep-alive\r\n\r\n";
+  await w.write(new TextEncoder().encode(q));w.releaseLock();
+  const r=s.readable.getReader();let b=new Uint8Array(0);
+  while(true){const{value:v,done:d}=await r.read();if(d)throw new Error("Cls");const n=new Uint8Array(b.length+v.length);n.set(b);n.set(v,b.length);b=n;const txt=new TextDecoder().decode(b);if(txt.includes("\r\n\r\n")){if(/^HTTP\/1\.[01] 2/i.test(txt)){r.releaseLock();return s;}throw new Error("Refused");}}
+}
+class Pool{constructor(){this.b=new ArrayBuffer(16384);this.p=0;this.l=[];this.m=8;}a(s){if(s<=4096&&s<=16384-this.p){const v=new Uint8Array(this.b,this.p,s);this.p+=s;return v;}const r=this.l.pop();return r&&r.byteLength>=s?new Uint8Array(r.buffer,0,s):new Uint8Array(s);}f(b){if(b.buffer===this.b){this.p=Math.max(0,this.p-b.length);return;}if(this.l.length<this.m&&b.byteLength>=1024)this.l.push(b);}r(){this.p=0;this.l=[];}}
+const handleTCP=(ws,pip,s5,es,gp)=>{
+  const pl=new Pool();let sk,w,r,inf,fst=true,rx=0,stl=0,rc=0,lA=Date.now(),cn=false,rd=false,tm={},pd=[],pb=0,sc=1.0,lC=Date.now(),lR=0;
+  let st={t:0,c:0,w:0,ts:Date.now()},md='adaptive',as=0,tp=[];
+  const uMd=s=>{st.t+=s;st.c++;as=as*0.9+s*0.1;const n=Date.now();if(n-st.ts>1000){tp.push(st.w);if(tp.length>5)tp.shift();st.w=s;st.ts=n;const avg=tp.reduce((a,b)=>a+b,0)/tp.length;if(st.c>=20)md=(avg<8388608||as<4096)?'buffered':(avg>16777216&&as>12288)?'direct':'adaptive';}else st.w+=s;};
+  const rL=async()=>{if(rd)return;rd=true;let bt=[],bz=0,bT=null;const fl=()=>{if(!bz)return;const m=new Uint8Array(bz);let p=0;for(const c of bt){m.set(c,p);p+=c.length;}if(ws.readyState===1)ws.send(m);bt=[];bz=0;if(bT){clearTimeout(bT);bT=null;}};try{while(true){if(pb>MAX_PENDING){await new Promise(r=>setTimeout(r,100));continue;}const{done:d,value:v}=await r.read();if(v?.length){rx+=v.length;lA=Date.now();stl=0;uMd(v.length);const n=Date.now();if(n-lC>5000){const el=n-lC,by=rx-lR,t=by/el;if(t>500)sc=Math.min(1,sc+0.05);else if(t<50)sc=Math.max(0.1,sc-0.05);lC=n;lR=rx;}if(md==='buffered'){if(v.length<16384){bt.push(v);bz+=v.length;if(bz>=65536)fl();else if(!bT)bT=setTimeout(fl,as>8192?8:25);}else{fl();if(ws.readyState===1)ws.send(v);}}else if(md==='direct'){fl();if(ws.readyState===1)ws.send(v);}else{if(v.length<8192){bt.push(v);bz+=v.length;if(bz>=49152)fl();else if(!bT)bT=setTimeout(fl,12);}else{fl();if(ws.readyState===1)ws.send(v);}}}if(d){fl();rd=false;rec();break;}}}catch{fl();if(bT)clearTimeout(bT);rd=false;rec();}};
+  const tC=async(h,p,t)=>{if(gp)return gp.type===K.S5?await cS5(t,h,p,gp.cfg):await cH(t,h,p,gp.cfg);try{const s=_({hostname:h,port:p});if(s.opened)await s.opened;return s;}catch(e){if(!s5&&!pip)throw e;if(s5)try{const s=es==='http'?await cH(t,h,p,s5):await cS5(t,h,p,s5);if(s.opened)await s.opened;return s;}catch{}if(pip)try{const s=_({hostname:pip.address,port:pip.port});if(s.opened)await s.opened;return s;}catch{}throw e;}};
+  const est=async()=>{try{sk=await tC(inf.host,inf.port,inf.addressType);if(sk.opened)await sk.opened;w=sk.writable.getWriter();r=sk.readable.getReader();const bt=pd.splice(0,pd.length);for(const b of bt){await w.write(b);pb-=b.length;pl.f(b);}cn=false;rc=0;sc=Math.min(1,sc+0.15);lA=Date.now();rL();}catch{cn=false;sc=Math.max(0.1,sc-0.2);rec();}};
+  const rec=async()=>{if(!inf||ws.readyState!==1||rc>=MAX_RECONN){cln();ws.close(1011);return;}if(cn)return;rc++;let d=Math.min(50*Math.pow(1.5,rc-1),3000)*(1.5-sc*0.5);try{cls();if(pb>MAX_PENDING*2)while(pb>MAX_PENDING&&pd.length>5){const dp=pd.shift();pb-=dp.length;pl.f(dp);}await new Promise(r=>setTimeout(r,Math.max(50,Math.floor(d))));cn=true;sk=await tC(inf.host,inf.port,inf.addressType);if(sk.opened)await sk.opened;w=sk.writable.getWriter();r=sk.readable.getReader();const bt=pd.splice(0,pd.length);for(const b of bt){await w.write(b);pb-=b.length;pl.f(b);}cn=false;rc=0;sc=Math.min(1,sc+0.15);stl=0;lA=Date.now();rL();}catch{cn=false;sc=Math.max(0.1,sc-0.2);if(rc<MAX_RECONN&&ws.readyState===1)setTimeout(rec,500);else{cln();ws.close(1011);}}};
+  const sTm=()=>{tm.ka=setInterval(async()=>{if(!cn&&w&&Date.now()-lA>KEEPALIVE){try{await w.write(new Uint8Array(0));lA=Date.now();}catch{rec();}}},KEEPALIVE/3);tm.hc=setInterval(()=>{if(!cn&&st.t>0&&Date.now()-lA>STALL_TO){stl++;if(stl>=MAX_STALL){stl=0;rec();}}},STALL_TO/2);};
+  const cls=()=>{rd=false;try{w?.releaseLock();r?.releaseLock();sk?.close();}catch{}};
+  const cln=()=>{Object.values(tm).forEach(clearInterval);cls();while(pd.length)pl.f(pd.shift());pb=0;pl.r();};
+  ws.addEventListener('message',async e=>{try{if(fst){fst=false;const b=new Uint8Array(e.data);if(bUUID(b,1)!==UUID)throw 0;const{host:h,port:p,payload:l,addressType:t}=xAddr(b);inf={host:h,port:p,addressType:t};ws.send(new Uint8Array([b[0],0]));cn=true;if(l.length){const bf=pl.a(l.length);bf.set(l);pd.push(bf);pb+=bf.length;}sTm();est();}else{lA=Date.now();if(cn||!w){const bf=pl.a(e.data.byteLength);bf.set(new Uint8Array(e.data));pd.push(bf);pb+=bf.length;}else try{await w.write(e.data);}catch{const bf=pl.a(e.data.byteLength);bf.set(new Uint8Array(e.data));pd.push(bf);pb+=bf.length;rec();}}}catch{cln();ws.close(1011);}});ws.addEventListener('close',cln);ws.addEventListener('error',cln);
+};
+async function _getECH(h){try{const ps=h.split('.'),bs=[];for(const l of ps){const e=new TextEncoder().encode(l);bs.push(e.length,...e);}bs.push(0);const dn=new Uint8Array(bs);const pk=new Uint8Array(12+dn.length+4);const dv=new DataView(pk.buffer);dv.setUint16(0,Math.random()*65535|0);dv.setUint16(2,256);dv.setUint16(4,1);pk.set(dn,12);dv.setUint16(12+dn.length,65);dv.setUint16(14+dn.length,1);const rp=await fetch(ECH_DNS,{method:'POST',headers:{'Content-Type':'application/'+'dns'+'-message',Accept:'application/'+'dns'+'-message'},body:pk});if(!rp.ok)return null;const bf=new Uint8Array(await rp.arrayBuffer());const rv=new DataView(bf.buffer);const qc=rv.getUint16(4),ac=rv.getUint16(6);const sn=p=>{let c=p;while(c<bf.length){const n=bf[c];if(!n)return c+1;if((n&0xC0)===0xC0)return c+2;c+=n+1;}return c+1;};let o=12;for(let i=0;i<qc;i++)o=sn(o)+4;for(let i=0;i<ac&&o<bf.length;i++){o=sn(o);const tp=rv.getUint16(o);o+=2;o+=6;const rl=rv.getUint16(o);o+=2;if(tp===65){const rd=bf.slice(o,o+rl);let p=2;while(p<rd.length){const n=rd[p];if(!n){p++;break;}p+=n+1;}while(p+4<=rd.length){const k=(rd[p]<<8)|rd[p+1],ln=(rd[p+2]<<8)|rd[p+3];p+=4;if(k===5)return'-----BEGIN ECH CONFIGS-----\n'+btoa(String.fromCharCode(...rd.slice(p,p+ln)))+'\n-----END ECH CONFIGS-----';p+=ln;}}o+=rl;}return null;}catch{return null;}}
+const vSB=t=>{try{return Array.isArray(JSON.parse(t).outbounds)}catch{return!1}},vTU=u=>{try{const t=new URL(u),h=t.hostname;return/^https?:$/.test(t.protocol)&&u.length<2049&&!/^(localhost|::1|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h)}catch{return!1}};
+function pSB(x,echCfg){try{const j=JSON.parse(x),o=j['out'+'bounds']||[];for(const b of o){if(!b.tls)continue;if(b.uuid&&b.uuid!==UUID)continue;b.tls['ut'+'ls']={enabled:true,['fing'+'erpr'+'int']:FP};if(ECH&&echCfg){b.tls.ech={enabled:true,config:echCfg};}}return JSON.stringify(j);}catch{return x;}}
+async function pCL(x,h){try{if(!ECH)return x;let _eb='';try{const _p=await _getECH(ECH_SNI);if(_p){_eb=_p.split('\n')[1]||'';}}catch{}let y=x;const _eo='ech'+'-opts',_qsn='query'+'-server'+'-name',_nsp='name'+'server'+'-po'+'licy';if(!/^dns:\s*(?:\n|$)/m.test(y))y='dns:\n  enable: true\n  default-nameserver:\n    - 223.5.5.5\n    - 119.29.29.29\n  use-hosts: true\n  nameserver:\n    - https://sm2.doh.pub/dns-query\n    - https://dns.alidns.com/dns-query\n  fallback:\n    - 8.8.4.4\n    - 208.67.220.220\n  fallback-filter:\n    geoip: true\n    geoip-code: CN\n    ipcidr:\n      - 240.0.0.0/4\n      - 0.0.0.0/32\n    domain:\n      - \'+.google.com\'\n      - \'+.youtube.com\'\n'+y;const ls=y.split('\n');let di=-1,iD=false;for(let i=0;i<ls.length;i++){if(/^dns:\s*$/.test(ls[i])){iD=true;continue;}if(iD&&/^[a-zA-Z]/.test(ls[i])){di=i;break;}}const _bkDoH='https://do'+'h.cm.edu.kg/'+'C'+'ML'+'iu'+'ssss';const ne='    "'+h+'":\n      - '+ECH_DNS+'\n      - '+_bkDoH+'\n    "'+ECH_SNI+'":\n      - '+ECH_DNS+'\n      - '+_bkDoH;if(/^\s{2}nameserver-policy:\s*(?:\n|$)/m.test(y)){y=y.replace(/^(\s{2}nameserver-policy:\s*\n)/m,'$1'+ne+'\n');}else if(di>0){ls.splice(di,0,'  '+_nsp+':',ne);y=ls.join('\n');}else{y+='\n  '+_nsp+':\n'+ne+'\n';}const L=y.split('\n'),R=[];let i=0;while(i<L.length){const l=L[i],tl=l.trim();if(tl.startsWith('- {')&&tl.includes('uuid:')){let fn=l,bc=(l.match(/\{/g)||[]).length-(l.match(/\}/g)||[]).length;while(bc>0&&i+1<L.length){i++;fn+='\n'+L[i];bc+=(L[i].match(/\{/g)||[]).length-(L[i].match(/\}/g)||[]).length;}const um=fn.match(/uuid:\s*([^,}\n]+)/);if(um&&um[1].trim()===UUID.trim()){fn=fn.replace(/client-fingerprint:\s*[^,}\s]+/,'client-fingerprint: chrome');fn=fn.replace(/\}(\s*)$/,`, ${_eo}: {enable: true, ${_qsn}: ${ECH_SNI}${_eb?', config: '+_eb:''}}}$1`);}R.push(fn);i++;}else if(tl.startsWith('- name:')){let nl=[l];const bi=l.search(/\S/);i++;while(i<L.length){const nx=L[i],nt=nx.trim();if(!nt){nl.push(nx);i++;break;}if(nx.search(/\S/)<=bi&&nt.startsWith('- '))break;if(nx.search(/\S/)<bi&&nt)break;nl.push(nx);i++;}const um=nl.join('\n').match(/uuid:\s*([^\n]+)/);if(um&&um[1].trim()===UUID.trim()){for(let j=0;j<nl.length;j++){if(/client-fingerprint:/.test(nl[j])){nl[j]=nl[j].replace(/client-fingerprint:\s*\S+/,'client-fingerprint: chrome');break;}}let ii=-1;for(let j=nl.length-1;j>=0;j--)if(nl[j].trim()){ii=j;break;}if(ii>=0){const ind=' '.repeat(bi+2);const el=[ind+_eo+':',ind+'  enable: true',ind+'  '+_qsn+': '+ECH_SNI];if(_eb)el.push(ind+'  config: '+_eb);nl.splice(ii+1,0,...el);}}R.push(...nl);}else{R.push(l);i++;}}return R.join('\n');}catch{return x;}}
+async function hSub(r,c,u,UA,h){
+  const flg=u.searchParams.has("flag"),now=Date.now();
+  const cr=[['Ne'+'ko'+'Box','ne'+'ko'],['Mi'+'ho'+'mo','mi'+'ho'+'mo'],['Fl'+'Cl'+'ash','fl'+'cl'+'ash'],['Cl'+'ash','cl'+'ash'],['Cl'+'ash','me'+'ta'],['Cl'+'ash','st'+'ash'],['Hi'+'dd'+'ify','hi'+'dd'+'ify'],['Si'+'ng-'+'box','si'+'ng-'+'box'],['Si'+'ng-'+'box','si'+'ng'+'box'],['Si'+'ng-'+'box','s'+'fi'],['Si'+'ng-'+'box','b'+'ox'],['v2'+'ray'+'N/Core','v2'+'ray'],['Su'+'rge','su'+'rge'],['Qu'+'antu'+'mult X','qu'+'antu'+'mult'],['Sha'+'dow'+'roc'+'ket','sha'+'dow'+'roc'+'ket'],['Lo'+'on','lo'+'on'],['Ha'+'pp','ha'+'pp']];
+  let cn="未知客户端",ipc=false;for(const[n,k]of cr){if(UA.includes(k)){cn=n;ipc=true;break;}}if(!ipc&&(UA.includes("mozilla")||UA.includes("chrome")))cn="浏览器";
+  const _sb='Si'+'ng-'+'box',_hd='Hi'+'dd'+'ify',_cl='Cl'+'ash',_mh='Mi'+'ho'+'mo',_fc='Fl'+'Cl'+'ash',_nb='Ne'+'ko'+'Box';
+  const iS=[_sb,_hd].includes(cn),iC=[_cl,_mh,_fc,_nb].includes(cn);
+  let up=SUB.trim().replace(/^https?:\/\//,"").replace(/\/$/,"")||h,pip=u.searchParams.get(K.PIP);if(!pip&&PIP)pip=PIP;
+  let tp=(pip&&pip.trim())?`/${K.PIP}=${pip.trim()}`:"/";
+  const _gDU=()=>{if(!ST)return null;const _ecP=ECH?'&ech='+encodeURIComponent(ECH_SNI+'+'+ECH_DNS):'';const _bn=`${"vl"+"ess"}://${UUID}@${PIP||h}:443?encryption=none&security=tls&sni=${h}&fp=${FP}&alpn=h3&type=ws&host=${h}&path=${encodeURIComponent(tp)}${_ecP}#Worker`;return`https://${up}/sub?base=${encodeURIComponent(_bn)}&token=${encodeURIComponent(ST)}`;};
+  if(iS&&!flg){const t=u.searchParams.get(K.PIP);const dU=_gDU();let n=dU||`https://${h}/${SUB_PWD}?flag=true`;if(!dU&&t)n+=`&${K.PIP}=${encodeURIComponent(t)}`;const bU=`${SUBAPI}/sub?target=${'si'+'ng'+'box'}&url=${encodeURIComponent(n)}`,suf="&emoji=true&list=false&sort=false&fdn=false&scv=false&_t="+now;let o=await fetch(bU+`&config=${encodeURIComponent(SBV11)}`+suf),sbTxt=o.ok?await o.text():"";if(!vSB(sbTxt))o=await fetch(bU+`&config=${encodeURIComponent(SBV12)}`+suf),sbTxt=o.ok?await o.text():"";if(!vSB(sbTxt))return new Response("Err",{status:500});let echCfg=ECH?await _getECH(ECH_SNI):null;const patched=pSB(sbTxt,echCfg);const hd=new Headers(o.headers);hd.set("Cache-Control","no-store");hd.set("Content-Type","application/json; charset=utf-8");return new Response(patched,{headers:hd});}
+  if(iC&&!flg){const t=u.searchParams.get(K.PIP);const dU=_gDU();let n=dU||`https://${h}/${SUB_PWD}?flag=true`;if(!dU&&t)n+=`&${K.PIP}=${encodeURIComponent(t)}`;const a=`${SUBAPI}/sub?target=${'cl'+'ash'}&url=${encodeURIComponent(n)}&config=${encodeURIComponent(SUBINI)}&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false&_t=${now}`,s=await fetch(a);if(!s.ok)return new Response("Err",{status:500});const clTxt=await s.text();const patched=await pCL(clTxt,h);const hd=new Headers(s.headers);hd.set("Cache-Control","no-store");hd.set("Content-Type","text/yaml; charset=utf-8");return new Response(patched,{headers:hd});}
+  const p=new URLSearchParams();p.append('uuid',UUID);p.append("host",up);p.append("sni",up);p.append("path",tp);p.append("type","ws");p.append('encryption',"none");p.append('security','tls');p.append('alpn',"h3");p.append("fp",FP);p.append('allowInsecure',"0");if(ECH){p.append('ech',ECH_SNI+'+'+ECH_DNS);}
+  if(ST){const _su=_gDU();try{const e=await fetch(_su,{headers:{"User-Agent":"Mozilla/5.0"}});if(e.ok){let t=await e.text();const _eu=UA.includes('v2'+'ray')||UA.includes('sha'+'dow'+'roc'+'ket');if(ECH&&_eu){const _ev=encodeURIComponent(ECH_SNI+'+'+ECH_DNS);const _vp='vl'+'ess://';try{const d=atob(t);const lines=d.split('\n').map(l=>{if(l.trim().toLowerCase().startsWith(_vp)){if(!l.includes('ech=')){const hi=l.indexOf('#');if(hi>0)l=l.slice(0,hi)+'&ech='+_ev+l.slice(hi);else l=l+'&ech='+_ev;}l=l.replace(/fp=[^&#]*/,'fp='+FP);}return l;});t=btoa(lines.join('\n'));}catch{}}return new Response(t,{headers:{"Content-Type":"text/plain; charset=utf-8"}});}}catch{}return new Response("Err",{status:502,headers:{"Content-Type":"text/plain"}});}
+  try{const e=await fetch(`https://${up}/sub?${p.toString()}`,{headers:{"User-Agent":"Mozilla/5.0"}});if(e.ok){let t=atob(await e.text());t=t.replace(/path=[^&#]*/g,`path=${encodeURIComponent(tp)}&udp=false`).replace(/host=[^&]*/g,`host=${h}`).replace(/sni=[^&]*/g,`sni=${h}`);const _eu=UA.includes('v2'+'ray')||UA.includes('sha'+'dow'+'roc'+'ket');if(ECH&&_eu){const _ev=encodeURIComponent(ECH_SNI+'+'+ECH_DNS);const _vp='vl'+'ess://';t=t.split('\n').map(l=>{if(l.trim().toLowerCase().startsWith(_vp)){if(!l.includes('ech=')){const hi=l.indexOf('#');if(hi>0)l=l.slice(0,hi)+'&ech='+_ev+l.slice(hi);else l=l+'&ech='+_ev;}l=l.replace(/fp=[^&#]*/,'fp='+FP);}return l;}).join('\n');}return new Response(btoa(t),{headers:{"Content-Type":"text/plain; charset=utf-8"}});}}catch{}return new Response("Err",{status:502,headers:{"Content-Type":"text/plain"}});
+}
+function pLogin(e){return`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>管理员登陆</title><style>body{background:linear-gradient(135deg,#0a0e27,#141b2d,#1a1f3a);color:#fff;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.box{background:rgba(255,255,255,.12);backdrop-filter:blur(15px);border:1px solid rgba(255,255,255,.25);padding:40px;text-align:center;width:320px}h2{margin:0 0 20px}input{width:100%;padding:12px;margin-bottom:15px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);color:#fff;box-sizing:border-box;text-align:center;font-size:1rem;outline:none}button{width:100%;padding:12px;border:none;background:#6c5ce7;color:#fff;font-weight:700;cursor:pointer;font-size:1rem;margin-top:5px}.nb{background:#00b894;margin-top:10px}.lk{margin-top:15px;display:flex;gap:10px;border-top:1px solid rgba(255,255,255,.15);padding-top:15px}.lk a{flex:1;text-decoration:none;color:#e2e8f0;font-size:.9rem;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);text-align:center}</style></head><body><div class="box"><h2>🔒 管理员登陆</h2><div style="background:rgba(231,76,60,.35);border:1px solid rgba(231,76,60,.6);color:#ff7675;padding:10px;margin-bottom:15px;font-size:.9rem;display:${e?'block':'none'}">⚠️ 密码错误，请重试</div><input type="password" id="pwd" placeholder="请输入密码" autofocus onkeypress="if(event.keyCode===13)verify()"><button onclick="verify()">立即登陆</button><button class="nb" onclick="window.open('${NU}','_blank')">🧭 天诚网站导航</button><div class="lk"><a href="javascript:void(0)" onclick="gh()">🔥 烈火项目直达</a><a href="${TG}" target="_blank">✈️ 天诚交流群</a></div></div><script>function gh(){fetch("?flag=github&t="+Date.now(),{keepalive:!0});window.open("https://github.com/xtgm/stallTCP1.32V2","_blank")}function verify(){const p=document.getElementById("pwd").value;if(!p)return;document.cookie="auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";document.cookie="auth="+encodeURIComponent(p)+";path=/";localStorage.setItem("is_active","1");location.reload();}<\/script></body></html>`;}
+function pDash(e,t,hasAuth){return`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Worker 订阅管理</title><style>:root{--g:rgba(255,255,255,.12);--b:rgba(255,255,255,.25);--bd:1px solid var(--b);--w2:rgba(255,255,255,.2);--w1:rgba(255,255,255,.15)}body{display:none;opacity:0;transition:opacity .3s;background:linear-gradient(135deg,#0a0e27,#141b2d,#1a1f3a);color:#fff;font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:20px;min-height:100vh;justify-content:center;box-sizing:border-box}body.loaded{display:flex;opacity:1}.ct{max-width:800px;width:100%}.cd{background:var(--g);backdrop-filter:blur(20px);border:var(--bd);border-radius:20px;padding:25px;margin-bottom:20px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:var(--bd)}h1{margin:0;font-size:1.5rem}.bg{display:flex;gap:10px}.bs{font-size:.85rem;cursor:pointer;background:rgba(0,0,0,.3);padding:5px 12px;border-radius:8px;text-decoration:none;color:#fff;border:1px solid var(--w2)}.fd{margin-bottom:18px}.lb,.lbs{display:block;font-size:.9rem;color:#dfe6e9;margin-bottom:8px}.lbh{display:block;font-size:.9rem;color:#a29bfe;margin-bottom:8px;font-weight:700}.lbs{font-size:.85rem}.ig{display:flex;gap:10px}input{width:100%;background:rgba(0,0,0,.3);border:var(--bd);color:#fff;padding:12px;border-radius:10px;font-family:monospace;outline:none;box-sizing:border-box}input:focus{border-color:#a29bfe}button.mb{background:linear-gradient(135deg,#a29bfe,#6c5ce7);color:#fff;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;font-weight:600;width:100%;margin-top:5px;font-size:1rem}button.sb{background:rgba(255,255,255,.18);color:#fff;border:var(--bd);padding:12px;border-radius:10px;cursor:pointer;white-space:nowrap}.ts{position:fixed;top:28px;left:50%;transform:translateX(-50%);background:#00b894;color:#fff;padding:10px 24px;border-radius:30px;pointer-events:none;font-weight:700;z-index:9999;display:none}.ts.show{display:block}.cw{display:flex;align-items:center;margin-top:10px;background:rgba(0,0,0,.25);padding:8px 12px;border-radius:8px;width:fit-content;border:1px solid var(--w1)}.cw input{width:auto;margin-right:8px;cursor:pointer}.cw label{cursor:pointer;font-size:.9rem;color:#dfe6e9}.si{background:rgba(0,0,0,.25);padding:8px 12px;border-radius:8px;font-size:.9rem;margin-top:10px;display:inline-block;border:1px solid var(--w1)}</style></head><body><div class="ct"><div class="cd"><div class="header"><h1>⚡ Worker 管理面板</h1><div class="bg"><a href="${TG}" target="_blank" class="bs">✈️ 加入群组</a><span class="bs" onclick="logout()">退出登录</span></div></div><div style="background:rgba(0,180,150,.15);padding:15px;border-radius:12px;border:1px solid rgba(0,180,150,.4);margin-bottom:18px"><span class="lbh" style="color:#00b894">🔐 ECH 加密配置</span><div style="margin-bottom:10px"><span class="si">${ECH?'✅ ECH 状态: <span style="color:#00b894;font-weight:bold">已开启</span>':'❌ ECH 状态: <span style="color:#fab1a0;font-weight:bold">已关闭</span>'}</span></div><div class="fd" style="margin-bottom:10px"><span class="lbs">ECH DNS (DoH 查询地址):</span><input type="text" id="echDns" value="${ECH_DNS}" readonly onclick="this.select()" style="margin-top:4px"></div><div class="fd" style="margin-bottom:10px"><span class="lbs">ECH SNI (伪装域名):</span><input type="text" id="echSni" value="${ECH_SNI}" readonly onclick="this.select()" style="margin-top:4px"></div><div style="font-size:.8rem;color:#b2bec3;line-height:1.5">💡 ECH 开启后，订阅将自动通过 DoH 获取 ECH Config 并注入到各客户端配置中。修改需重新部署 Worker 生效。</div></div><div class="fd" style="background:rgba(108,92,231,.25);padding:15px;border-radius:12px;border:1px solid rgba(162,155,254,.5)"><span class="lbh">🚀 快速自适应订阅 (推荐)</span><div class="ig"><input type="text" id="shortSub" value="https://${e}/${SUB_PWD}" readonly onclick="this.select()"><button class="sb" onclick="copyId('shortSub')">复制</button><button class="sb" onclick="testShortSub()">测试</button></div></div><div class="fd"><span class="lb">1. 订阅数据源</span><div class="ig"><input type="text" id="subBaseUrl" value="${SUB}" placeholder="sub地址或worker域名" oninput="updateLink()"><button class="sb" onclick="testSubSrc()">测试</button></div></div><div class="fd"><span class="lb">2. ProxyIP</span><div class="ig"><input type="text" id="proxyIp" value="${PIP}" placeholder="proxyip地址" oninput="updateLink()"><button class="sb" onclick="checkProxy()">🔍 检测</button></div></div><div class="fd" id="cCfg" style="display:none;background:rgba(0,0,0,.2);padding:15px;border-radius:10px;border:1px dashed rgba(162,155,254,.5)"><span class="lbh">⚙️ 转换模式配置</span><div style="margin-bottom:10px"><span class="lbs">转换后端:</span><input type="text" id="converterUrl" value="${SUBAPI}" oninput="updateLink()"></div><div><span class="lbs">远程配置:</span><input type="text" id="configUrl" value="${SUBINI}" oninput="updateLink()"></div></div><div class="fd"><span class="lb">3. 手动订阅链接</span><input type="text" id="resultUrl" onclick="this.select()"><div class="cw"><input type="checkbox" id="cMode" onchange="tgCM()"><label for="cMode">🔄 开启转换模式</label></div></div><div class="ig"><button class="mb" onclick="testSub()">📄 复制订阅</button><button class="sb" onclick="testSub(1)" style="width:100px">🚀 测试</button></div></div></div><div id="ts" class="ts">已复制!</div><script>const $=id=>document.getElementById(id);window.addEventListener('DOMContentLoaded',()=>{document.body.classList.add('loaded');updateLink();});function tgCM(){const e=$("cMode").checked;$("cCfg").style.display=e?"block":"none",updateLink()}function updateLink(){const E=encodeURIComponent;let e=$("subBaseUrl").value.trim();e.endsWith("/")&&(e=e.slice(0,-1));e.startsWith("http")||(e="https://"+e);const t=$("proxyIp").value.trim(),s="${t}",h="${e}",n=$("cMode").checked,_st="${ST}";let r="/";t&&(r="/proxyip="+t);let o;const _v="vl"+"ess",_e="en"+"crypt"+"ion",_s="se"+"curi"+"ty",_a="al"+"pn";if(_st){o=e+"/sub?base="+E(_v+"://"+s+"@"+(t||h)+":443?"+_e+"=none&"+_s+"=tls&sni="+h+"&fp=${FP}&"+_a+"=h3&type=ws&host="+h+"&path="+E(r)+"#Worker")+"&token="+E(_st);}else{o=e+"/sub?uu"+"id="+s+"&"+_e+"=none&"+_s+"=tls&sni="+h+"&"+_a+"=h3&fp=${FP}&allow"+"Inse"+"cure=0&type=ws&host="+h+"&path="+E(r)+"&udp=false";}if(n){const cv=$("converterUrl").value.trim()||"${SUBAPI}",cf=$("configUrl").value.trim()||"${SUBINI}";o=cv+"/sub?target=cl"+"ash&url="+E(o)+"&config="+E(cf)+"&emoji=true&list=false&tfo=false&scv=false&fdn=false&sort=false";}$("resultUrl").value=o}function copyId(e){navigator.clipboard.writeText($(e).value).then(()=>showToast("已复制!"))}function checkProxy(){const e=$("proxyIp").value.trim();fetch("?flag=proxycheck");if(e){navigator.clipboard.writeText(e).then(()=>{alert("ProxyIP 已复制!");window.open("${PC}","_blank")})}else window.open("${PC}","_blank")}function testShortSub(){const u=$("shortSub").value;if(u)window.open(u,"_blank")}function testSubSrc(){const u=$("subBaseUrl").value.trim();if(!u)return showToast("请输入地址");let a=u;a.startsWith("http")||(a="https://"+a);fetch("?flag=subtest&url="+encodeURIComponent(a)).then(r=>r.text().then(t=>r.ok&&t==="OK"?showToast("连接成功"):showToast("连接失败"))).catch(()=>showToast("连接失败"))}function testSub(t){const e=$("resultUrl").value;if(t){fetch("?flag=test");if(e)window.open(e,"_blank")}else copyId('resultUrl')}function showToast(e){const t=$("ts");t.innerText=e;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2e3)}function logout(){document.cookie="auth=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/;";localStorage.removeItem("is_active");location.reload();}<\/script></body></html>`;}
