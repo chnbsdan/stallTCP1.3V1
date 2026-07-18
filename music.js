@@ -5,9 +5,9 @@ import/**/{/**/connect as $c/**/}/**/from/**/'cloudflare:sockets';const _=o=>$c(
 // =============================================================================
 
 // --- 基础账号与网络配置 ---
-let UUID = "06b65903-406d-4a41-8463-6fd5c0ee7798"; //修改可用的uuid
-const WEB_PASSWORD = "abc";  //修改你的登录密码
-const SUB_PASSWORD = "123456";  //修改你的订阅密码
+let UUID = "49df6100-cad1-48d1-a42c-6f8cc19b095f"; //修改可用的uuid
+const WEB_PASSWORD = "admin123";  //修改你的登录密码
+const SUB_PASSWORD = "good";  //修改你的订阅密码
 const SUB_TOKEN = "";  //ST裂变Token，留空不启用，支持环境变量 SUB_TOKEN 覆盖
 const DEFAULT_PROXY_IP = 'Pro'+'xy'+'IP.US.CM'+'Liu'+'ssss.net'; //单个proxyip socks5 http
 const DEFAULT_SUB_DOMAIN = 'https://owo.o00o.ooo/'; //单个sub优选订阅
@@ -773,35 +773,54 @@ async function sendTgMsg(ctx, env, title, r, detail = "", isAdmin = false) {
 // 生成音乐播放器的HTML
 function generateMusicHTML() {
     return `
-    <!-- ======================= 音乐播放器部分 ======================= -->
-    
-    <!-- 独立歌词显示 -->
-    <div id="floating-lyrics">
-        <div class="current-line"></div>
-        <div class="next-line"></div>
+    <!-- 歌词窗口 - 文字居中，窗口可拖，无限缩放 -->
+    <div id="floating-lyrics" style="position:fixed;left:100px;bottom:50px;z-index:9999999;color:#ff8c00;font-size:30px;font-weight:bold;background:rgba(0,0,0,0.85);padding:20px 30px 45px 30px;border-radius:12px;backdrop-filter:blur(10px);border:2px solid rgba(255,140,0,0.3);display:block;opacity:1;pointer-events:auto;cursor:move;box-shadow:0 8px 32px rgba(0,0,0,0.5);min-width:150px;min-height:80px;">
+        <div class="current-line" style="color:#ff4500;font-size:30px;margin-bottom:8px;font-weight:bold;text-align:center;">🎵 歌词窗口</div>
+        <div class="next-line" style="color:#ff8c00;font-size:14px;opacity:0.8;text-align:center;">播放音乐后显示歌词</div>
+        <div id="lyrics-resize-handle" style="position:absolute;bottom:4px;right:4px;width:28px;height:28px;cursor:nwse-resize;pointer-events:auto;z-index:20;background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,0.6) 50%);border-radius:0 0 12px 0;border-right:2px solid rgba(255,255,255,0.3);border-bottom:2px solid rgba(255,255,255,0.3);"></div>
+        <div class="lyrics-settings-btn" style="position:absolute;top:6px;right:6px;width:28px;height:28px;background:rgba(0,0,0,0.7);border-radius:50%;color:#fff;font-size:16px;text-align:center;line-height:28px;cursor:pointer;pointer-events:auto;z-index:10;border:1px solid rgba(255,255,255,0.2);">⚙</div>
     </div>
     
-    <!-- 音乐胶囊 - 点击展开播放器 -->
-    <div id="music-capsule" title="点击展开音乐播放器">
-        <img id="capsule-cover" src="https://p2.music.126.net/4HGEnXVexEfF2M4WdDdfrQ==/109951166354363385.jpg" alt="capsule cover">
+    <div id="lyrics-settings-panel" style="position:fixed;display:none;z-index:10000000;background:rgba(20,20,40,0.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:20px 24px;min-width:220px;color:#fff;box-shadow:0 12px 48px rgba(0,0,0,0.8);pointer-events:auto;font-family:Sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <span style="font-weight:600;font-size:15px;">🎤 歌词设置</span>
+            <span id="lyrics-settings-close" style="cursor:pointer;font-size:20px;opacity:0.6;">&times;</span>
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:12px;color:#aaa;display:block;margin-bottom:4px;">文字颜色</label>
+            <input type="color" id="lyrics-color-picker" value="#ff4500" style="width:100%;height:36px;border:none;border-radius:8px;cursor:pointer;">
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:12px;color:#aaa;display:block;margin-bottom:4px;">字号大小</label>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <input type="range" id="lyrics-font-slider" min="12" max="80" value="30" style="flex:1;">
+                <span id="lyrics-font-size-display" style="min-width:36px;text-align:center;font-weight:600;color:#ff8c00;">30</span>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+            <button id="lyrics-reset-btn" style="flex:1;padding:8px;border:none;border-radius:8px;background:rgba(255,255,255,0.08);color:#ccc;cursor:pointer;font-size:13px;">重置</button>
+            <button id="lyrics-apply-btn" style="flex:1;padding:8px;border:none;border-radius:8px;background:linear-gradient(135deg,#ff8c00,#ff4500);color:#fff;cursor:pointer;font-size:13px;font-weight:600;">应用</button>
+        </div>
     </div>
     
-    <!-- 播放器容器 -->
-    <div id="player-wrap" aria-hidden="true">
+    <div id="music-capsule" style="position:fixed;left:22px;bottom:96px;width:72px;height:72px;border-radius:50%;cursor:pointer;z-index:30000;background:radial-gradient(circle at 30% 30%, #00c3ff, #0061ff);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,180,255,0.3);">
+        <img id="capsule-cover" src="https://p2.music.126.net/4HGEnXVexEfF2M4WdDdfrQ==/109951166354363385.jpg" style="width:90%;height:90%;border-radius:50%;object-fit:cover;">
+    </div>
+    
+    <div id="player-wrap" style="position:fixed;left:18px;bottom:92px;width:360px;max-width:calc(100% - 36px);z-index:15000;display:none;">
         <div id="aplayer-container"></div>
     </div>
     
-    <!-- 右键菜单（毛玻璃效果） -->
-    <ul id="right-menu" role="menu" aria-hidden="true">
-        <li id="menu-play">▶ 播放 / 暂停</li>
-        <li id="menu-prev">⏮ 上一首</li>
-        <li id="menu-next">⏭ 下一首</li>
-        <li id="menu-volup">🔊 音量 +</li>
-        <li id="menu-voldown">🔉 音量 -</li>
-        <li id="menu-lyrics">📜 显示/隐藏歌词</li>
-        <li id="menu-support">💡 技术支持</li>
-        <li id="menu-fullscreen">🖥️ 全屏模式</li>
-        <li id="menu-close">❌ 关闭播放器</li>
+    <ul id="right-menu" style="position:fixed;display:none;z-index:40000;min-width:220px;background:rgba(0,0,0,0.9);backdrop-filter:blur(12px);color:#fff;border-radius:12px;padding:8px 0;border:1px solid rgba(255,255,255,0.1);box-shadow:0 10px 40px rgba(0,0,0,0.6);">
+        <li id="menu-play" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">▶ 播放 / 暂停</li>
+        <li id="menu-prev" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">⏮ 上一首</li>
+        <li id="menu-next" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">⏭ 下一首</li>
+        <li id="menu-volup" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">🔊 音量 +</li>
+        <li id="menu-voldown" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">🔉 音量 -</li>
+        <li id="menu-lyrics" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">📜 隐藏歌词</li>
+        <li id="menu-support" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">💡 技术支持</li>
+        <li id="menu-fullscreen" style="padding:10px 20px;cursor:pointer;list-style:none;border-bottom:1px solid rgba(255,255,255,0.06);border-radius:8px;margin:0 4px;">🖥️ 全屏模式</li>
+        <li id="menu-close" style="padding:10px 20px;cursor:pointer;list-style:none;border-radius:8px;margin:0 4px;">❌ 关闭播放器</li>
     </ul>
     `;
 }
@@ -885,28 +904,33 @@ function generateMusicCSS() {
 
         /* ===== 独立歌词显示 ===== */
         #floating-lyrics {
-            position: fixed;
-            left: 100px;
-            bottom: 50px;
-            text-align: left;
-            z-index: 99999;
-            color: #ff8c00;
-            font-size: 18px;
-            font-weight: bold;
-            text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.9);
-            background: rgba(255, 255, 255, 0.10);
-            padding: 15px 20px;
-            border-radius: 12px;
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            max-width: 400px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            pointer-events: none;
+    position: fixed;
+    left: 100px;
+    bottom: 50px;
+    text-align: left;
+    z-index: 999999;
+    color: #ff8c00;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.9);
+    background: rgba(255, 255, 255, 0.10);
+    padding: 15px 20px 35px 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    opacity: 1;
+    transition: opacity 0.3s ease, box-shadow 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    pointer-events: auto;
+    cursor: move;
+    user-select: none;
+    /* 删掉所有 width/height/min/max 限制！ */
+}
+        #floating-lyrics.show {
+            opacity: 1;
+            pointer-events: auto;
         }
-        #floating-lyrics.show { opacity: 1; }
         #floating-lyrics .current-line {
             color: #ff4500;
             font-size: 30px;
@@ -915,21 +939,44 @@ function generateMusicCSS() {
             min-height: 24px;
             overflow: hidden;
             position: relative;
+            white-space: nowrap;
+            text-overflow: ellipsis;
         }
         #floating-lyrics .next-line {
             color: #ff8c00;
             font-size: 14px;
             opacity: 0.8;
             min-height: 18px;
-        }
-        #floating-lyrics .current-line .typing-text {
-            display: inline-block;
-            overflow: hidden;
             white-space: nowrap;
-            animation: typing 2s steps(40, end), blink-caret 0.75s step-end infinite;
-            border-right: 2px solid #ff4500;
-            animation-fill-mode: both;
+            text-overflow: ellipsis;
+            overflow: hidden;
         }
+        #floating-lyrics .resize-handle {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            cursor: nwse-resize;
+            pointer-events: auto;
+            background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.3) 50%);
+            border-radius: 0 0 8px 0;
+        }
+        #floating-lyrics:hover .lyrics-settings-btn {
+            opacity: 1;
+        }
+        #floating-lyrics .lyrics-settings-btn:hover {
+            background: rgba(255, 140, 0, 0.6);
+            transform: scale(1.1);
+        }
+        /* 修改后不要光标闪烁 */
+#floating-lyrics .current-line .typing-text {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    animation: typing 2s steps(40, end);  /* ← 只保留打字动画 */
+    animation-fill-mode: both;
+}
         #floating-lyrics .current-line .fade-in-text {
             opacity: 0;
             animation: fadeIn 0.5s ease-in forwards;
@@ -959,7 +1006,7 @@ function generateMusicCSS() {
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            z-index: 30000;
+            z-index: 999999;
             background: radial-gradient(circle at 30% 30%, #00c3ff, #0061ff);
             box-shadow: 0 8px 28px rgba(0,180,255,0.12);
         }
@@ -1087,6 +1134,24 @@ function generateMusicScript(host, uuid) {
     const floatingLyrics = document.getElementById('floating-lyrics');
     const currentLineEl = floatingLyrics.querySelector('.current-line');
     const nextLineEl = floatingLyrics.querySelector('.next-line');
+
+    // ===== 🔥 强制显示歌词窗口 =====
+    setTimeout(function() {
+        if (floatingLyrics) {
+            floatingLyrics.style.display = 'block';
+            floatingLyrics.style.opacity = '1';
+            floatingLyrics.style.pointerEvents = 'auto';
+            if (currentLineEl && !currentLineEl.textContent) {
+                currentLineEl.textContent = '🎵 歌词窗口已就绪';
+            }
+            if (nextLineEl && !nextLineEl.textContent) {
+                nextLineEl.textContent = '播放音乐后歌词会同步显示';
+            }
+            console.log('✅ 歌词窗口已显示');
+        } else {
+            console.warn('⚠️ 歌词元素未找到');
+        }
+    }, 500);
 
     function showLyricsWithEffect(currentText, nextText) {
         if (!lyricsVisible) return;
@@ -1253,14 +1318,229 @@ function generateMusicScript(host, uuid) {
         }
     }
 
+    /* ===== 歌词窗口拖动、缩放、颜色/字号调节 ===== */
+    (function initLyricsControls() {
+        const lyrics = document.getElementById('floating-lyrics');
+        if (!lyrics) {
+            console.warn('⚠️ 歌词元素未找到');
+            return;
+        }
+        const settingsBtn = lyrics.querySelector('.lyrics-settings-btn');
+        const settingsPanel = document.getElementById('lyrics-settings-panel');
+        const colorPicker = document.getElementById('lyrics-color-picker');
+        const fontSlider = document.getElementById('lyrics-font-slider');
+        const fontSizeDisplay = document.getElementById('lyrics-font-size-display');
+        const resetBtn = document.getElementById('lyrics-reset-btn');
+        const applyBtn = document.getElementById('lyrics-apply-btn');
+        const closeSettings = document.getElementById('lyrics-settings-close');
+        const currentLine = lyrics.querySelector('.current-line');
+        const nextLine = lyrics.querySelector('.next-line');
+
+        // 状态存储
+        let dragData = null;
+        let settingsVisible = false;
+
+        // ===== 拖动逻辑 =====
+        lyrics.addEventListener('mousedown', function(e) {
+            if (e.target.closest('.lyrics-settings-btn') || e.target.closest('#lyrics-resize-handle')) return;
+            if (!lyrics.classList.contains('show') && !lyrics.style.display !== 'none') return;
+            dragData = {
+                offsetX: e.clientX - lyrics.offsetLeft,
+                offsetY: e.clientY - lyrics.offsetTop
+            };
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!dragData) return;
+            let x = e.clientX - dragData.offsetX;
+            let y = e.clientY - dragData.offsetY;
+            x = Math.max(0, Math.min(window.innerWidth - lyrics.offsetWidth, x));
+            y = Math.max(0, Math.min(window.innerHeight - lyrics.offsetHeight, y));
+            lyrics.style.left = x + 'px';
+            lyrics.style.top = y + 'px';
+            lyrics.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', function() {
+            dragData = null;
+        });
+
+        // ===== 🔥 缩放逻辑（右下角手柄） =====
+const resizeHandle = document.getElementById('lyrics-resize-handle');
+if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        const lyrics = document.getElementById('floating-lyrics');
+        if (!lyrics) return;
+        
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = lyrics.offsetWidth;
+        const startH = lyrics.offsetHeight;
+        
+        function onResize(e2) {
+            let newW = startW + (e2.clientX - startX);
+            let newH = startH + (e2.clientY - startY);
+            // 最小限制 50px，最大不限
+            newW = Math.max(50, newW);
+            newH = Math.max(30, newH);
+            lyrics.style.width = newW + 'px';
+            lyrics.style.height = newH + 'px';
+        }
+        
+        function onResizeEnd() {
+            document.removeEventListener('mousemove', onResize);
+            document.removeEventListener('mouseup', onResizeEnd);
+        }
+        
+        document.addEventListener('mousemove', onResize);
+        document.addEventListener('mouseup', onResizeEnd);
+    });
+}
+
+        // ===== 设置面板 =====
+        function toggleSettings(e) {
+            if (e) e.stopPropagation();
+            settingsVisible = !settingsVisible;
+            if (settingsVisible) {
+                const rect = lyrics.getBoundingClientRect();
+                let px = rect.right - 220;
+                let py = rect.top - 10;
+                if (px < 10) px = rect.left + 10;
+                if (py < 10) py = rect.bottom + 10;
+                if (py + 300 > window.innerHeight) py = rect.top - 310;
+                if (settingsPanel) {
+                    settingsPanel.style.left = px + 'px';
+                    settingsPanel.style.top = py + 'px';
+                    settingsPanel.style.display = 'block';
+                }
+                if (colorPicker) {
+                    const curColor = currentLine ? currentLine.style.color || '#ff4500' : '#ff4500';
+                    colorPicker.value = curColor;
+                }
+                if (fontSlider) {
+                    const curSize = currentLine ? parseInt(currentLine.style.fontSize) || 30 : 30;
+                    fontSlider.value = curSize;
+                    if (fontSizeDisplay) fontSizeDisplay.textContent = curSize;
+                }
+            } else {
+                if (settingsPanel) settingsPanel.style.display = 'none';
+            }
+        }
+
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', toggleSettings);
+        }
+
+        function closeSettingsPanel() {
+            settingsVisible = false;
+            if (settingsPanel) settingsPanel.style.display = 'none';
+        }
+
+        if (closeSettings) {
+            closeSettings.addEventListener('click', closeSettingsPanel);
+        }
+
+        document.addEventListener('click', function(e) {
+            if (settingsVisible && settingsPanel && !settingsPanel.contains(e.target) && e.target !== settingsBtn) {
+                closeSettingsPanel();
+            }
+        });
+
+        // ===== 颜色调节 =====
+        if (colorPicker) {
+            colorPicker.addEventListener('input', function() {
+                const color = this.value;
+                if (currentLine) currentLine.style.color = color;
+            });
+        }
+
+        // ===== 字号调节 =====
+        if (fontSlider) {
+            fontSlider.addEventListener('input', function() {
+                const size = this.value + 'px';
+                if (fontSizeDisplay) fontSizeDisplay.textContent = this.value;
+                if (currentLine) currentLine.style.fontSize = size;
+                if (nextLine) nextLine.style.fontSize = Math.max(10, parseInt(this.value) * 0.45) + 'px';
+            });
+        }
+
+        // ===== 重置位置 =====
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                lyrics.style.left = '100px';
+                lyrics.style.bottom = '50px';
+                lyrics.style.top = 'auto';
+                lyrics.style.width = '400px';
+                lyrics.style.height = '';
+                if (currentLine) {
+                    currentLine.style.whiteSpace = 'nowrap';
+                    currentLine.style.color = '#ff4500';
+                    currentLine.style.fontSize = '30px';
+                }
+                if (nextLine) {
+                    nextLine.style.whiteSpace = 'nowrap';
+                    nextLine.style.color = '#ff8c00';
+                    nextLine.style.fontSize = '14px';
+                }
+                if (colorPicker) colorPicker.value = '#ff4500';
+                if (fontSlider) {
+                    fontSlider.value = 30;
+                    if (fontSizeDisplay) fontSizeDisplay.textContent = '30';
+                }
+                closeSettingsPanel();
+            });
+        }
+
+        // ===== 应用按钮 =====
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function() {
+                closeSettingsPanel();
+            });
+        }
+
+        // ===== 覆盖 toggleLyricsVisibility =====
+        window.toggleLyricsVisibility = function() {
+            lyricsVisible = !lyricsVisible;
+            if (lyricsVisible) {
+                lyrics.classList.add('show');
+                if (window.aplayer && !window.aplayer.audio.paused) {
+                    startLyricsUpdate(window.aplayer);
+                }
+            } else {
+                lyrics.classList.remove('show');
+                if (currentLine) currentLine.textContent = '';
+                if (nextLine) nextLine.textContent = '';
+                currentLyric = '';
+            }
+            const lyricsMenuItem = document.getElementById('menu-lyrics');
+            if (lyricsMenuItem) {
+                lyricsMenuItem.textContent = lyricsVisible ? '📜 隐藏歌词' : '📜 显示歌词';
+            }
+            localStorage.setItem('lyricsVisible', lyricsVisible.toString());
+        };
+    })();
+
     /* 点击胶囊：隐藏胶囊、显示播放器 */
     if (musicCapsule) {
-        musicCapsule.addEventListener('click', () => {
-            musicCapsule.style.display = 'none';
+    musicCapsule.addEventListener('click', function() {
+        console.log('🎵 胶囊被点击');
+        // 隐藏胶囊
+        musicCapsule.style.display = 'none';
+        // 显示播放器
+        const playerWrap = document.getElementById('player-wrap');
+        if (playerWrap) {
+            playerWrap.style.display = 'block';
             playerWrap.classList.add('show');
-            initMeting().catch(() => {});
+        }
+        // 初始化 APlayer
+        initMeting().catch(function(e) {
+            console.warn('APlayer初始化失败:', e);
         });
-    }
+    });
+}
 
     /* ================== 右键菜单 ================== */
     function showRightMenuAt(clientX, clientY) {
